@@ -5,6 +5,8 @@ use std::ffi::c_char;
 use std::mem::MaybeUninit;
 use std::ptr::{null, null_mut};
 
+// TODO: With X11 stuff now in its own module, these renames really aren't
+// needed and inconsistent with the wayland implementation
 use x11::xlib::{Display as XDisplay, GC as XGC, Window as XWindow, *};
 
 use crate::pixel::Pixel;

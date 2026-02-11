@@ -2,7 +2,7 @@
 // drawing and rendering.
 
 use crate::pixel::Pixel;
-use crate::triangle::{lin_interp, Point, ScreenCoords, Triangle};
+use crate::triangle::{Point, ScreenCoords, Triangle, lin_interp};
 use crate::window_system::WindowSystem;
 
 pub struct Renderer<T : WindowSystem> {
@@ -24,7 +24,7 @@ impl<T : WindowSystem> Renderer<T> {
 		let windowing : T =
 			<T as WindowSystem>::init((win_w, win_h), "MVEVGRS BITCH!")?;
 
-		let background_col : Pixel = Pixel::new(1.0, 0.0, 0.0, 1.0);
+		let background_col : Pixel = Pixel::new(0.0, 0.0, 0.0, 1.0);
 
 		let framebuffer : Vec<Pixel> =
 			vec![background_col.clone(); (win_w * win_h) as usize];
@@ -169,7 +169,7 @@ impl<T : WindowSystem> Renderer<T> {
 				self.framebuffer[lef_x..=rig_x].fill(if i == 0 {
 					Pixel::new(0.0, 0.0, 1.0, 1.0)
 				} else {
-					Pixel::new(0.0, 1.0, 0.0, 1.0)
+					Pixel::new(1.0, 0.0, 0.0, 1.0)
 				});
 			}
 		}

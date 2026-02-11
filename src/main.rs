@@ -8,16 +8,19 @@ mod window_system;
 
 use crate::renderer::Renderer;
 use crate::triangle::{Point, Triangle};
+use crate::window_system::wayland::Wayland;
 use crate::window_system::x11::X11;
 
 fn main() -> Result<(), ()> {
-	let mut renderer : Renderer<X11> = Renderer::new().unwrap();
+	let mut renderer : Renderer<Wayland> = Renderer::new().expect("ok guys");
 
-	let mut tri : Triangle = Triangle::default();
+	let tri : Triangle = Triangle::default();
 
-	let _p : Point = Point::default();
-
-	tri.points[2].y = -0.1_f32;
+	let mut tri : Triangle = Triangle::new(
+		Point::new(-1_f32, 0_f32, 0_f32),
+		Point::new(0_f32, 0_f32, 0_f32),
+		Point::new(1_f32, 0_f32, 0_f32),
+	);
 
 	renderer.tris.push(tri);
 
@@ -26,9 +29,12 @@ fn main() -> Result<(), ()> {
 	loop {
 		let start : std::time::Instant = std::time::Instant::now();
 
-		renderer.step_frame();
+		let tri : &mut Triangle = &mut renderer.tris[0];
 
-		renderer.tris[0].points[1].x = t.sin();
+		tri.points[0].y = -t.cos();
+		tri.points[2].y = t.sin();
+
+		renderer.step_frame();
 
 		t += std::time::Instant::now()
 			.duration_since(start)
