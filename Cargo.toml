@@ -4,8 +4,5 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-tempfile = "3.24.0"
-wayland-client = "0.31.12"
-wayland-protocols = { version = "0.32.10", features = ["client"] }
-
-x11 = "2.21.0"
+softbuffer = "0.4.8"
+winit = "0.30.12"

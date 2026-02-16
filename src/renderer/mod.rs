@@ -1,86 +1,153 @@
 // Module that handles the main loop of
 // drawing and rendering.
+use std::num::NonZeroU32;
+use std::rc::Rc;
+
+use softbuffer::{Buffer, Context, SoftBufferError, Surface};
+use winit::application::ApplicationHandler;
+use winit::dpi::{PhysicalSize, Size};
+use winit::error::{EventLoopError, OsError};
+use winit::event::WindowEvent;
+use winit::event_loop::{
+	ActiveEventLoop,
+	ControlFlow,
+	EventLoop,
+	OwnedDisplayHandle,
+};
+use winit::window::{Icon, Window, WindowAttributes, WindowId};
 
 use crate::pixel::Pixel;
 use crate::triangle::{Point, ScreenCoords, Triangle, lin_interp};
-use crate::window_system::WindowSystem;
 
-pub struct Renderer<T : WindowSystem> {
-	// Windowing syste,
-	windowing : T,
+pub struct Renderer {
+	// Winit window to draw to - could prolly be done with just a refernce and
+	// lifetimes but bro i dont wanna write all of the life time annotations
+	// :sob:
+	window : Rc<Window>,
+	// Suface that pixel data is written to
+	surface : Surface<OwnedDisplayHandle, Rc<Window>>,
 	// Main frame buffer that is written to
 	pub framebuffer : Vec<Pixel>,
 	// Go to value for filling the frame buffer
 	pub background_col : Pixel,
 	// Triangles to be rastered
 	pub tris : Vec<Triangle>,
+	// Update function to run before drawing each frame
+	pub update_fn : UserFunction,
 }
 
-impl<T : WindowSystem> Renderer<T> {
-	pub fn new() -> Result<Renderer<T>, String> {
-		let win_w : u32 = 940;
-		let win_h : u32 = 480;
+type UserFunction = fn(&mut Renderer) -> ();
 
-		let windowing : T =
-			<T as WindowSystem>::init((win_w, win_h), "MVEVGRS BITCH!")?;
+impl Renderer {
+	pub fn run(
+		init_fn : UserFunction,
+		update_fn : UserFunction,
+	) -> Result<(), String> {
+		let win_w : u32 = 1024;
+		let win_h : u32 = 768;
 
 		let background_col : Pixel = Pixel::new(0.0, 0.0, 0.0, 1.0);
 
 		let framebuffer : Vec<Pixel> =
-			vec![background_col.clone(); (win_w * win_h) as usize];
+			vec![background_col; (win_w * win_h) as usize];
 
 		let tris : Vec<Triangle> = Vec::new();
 
-		Ok(Renderer {
-			windowing,
+		let mut event_loop : EventLoop<()> = EventLoop::new()
+			.map_err(|e : EventLoopError| -> String { e.to_string() })?;
+
+		event_loop.set_control_flow(ControlFlow::Poll);
+
+		// Winit docs says making the window
+		// from the EventLoop (as opposeed to
+		// the ActiveEventLoop) is bad and
+		// depricated, however I don't want the
+		// Renderer to redundantly store things
+		// the winit window is already
+		// tracking so the only way to
+		// initialize those values is applying
+		// them in the Renderer's contructor
+		let window : Rc<Window> = Rc::new(
+			event_loop
+				.create_window(
+					WindowAttributes::default()
+						.with_inner_size(Size::Physical(PhysicalSize::new(win_w, win_h)))
+						.with_title(String::from("MVEVGS BIATCH!!")),
+				)
+				.map_err(|e : OsError| -> String { e.to_string() })?,
+		);
+
+		// Softbuffer context
+		let context : Context<OwnedDisplayHandle> =
+			Context::new(event_loop.owned_display_handle())
+				.map_err(|e : SoftBufferError| -> String { e.to_string() })?;
+
+		// Softbuffer surface pixels are written
+		// to
+		let surface : Surface<OwnedDisplayHandle, Rc<Window>> =
+			Surface::new(&context, window.clone())
+				.map_err(|e : SoftBufferError| -> String { e.to_string() })?;
+
+		let mut renderer : Renderer = Renderer {
+			surface,
+			window,
 			framebuffer,
 			background_col,
 			tris,
-		})
+			update_fn,
+		};
+
+		(init_fn)(&mut renderer);
+
+		event_loop
+			.run_app(&mut renderer)
+			.map_err(|e : EventLoopError| -> String { e.to_string() })
 	}
+
+	pub fn width(self: &Renderer) -> u32 { self.window.inner_size().width }
+
+	pub fn height(self: &Renderer) -> u32 { self.window.inner_size().height }
 
 	// Helpful conversion functions between
 	// NDC and pixel coordinates and vice
 	// versa
 	pub fn screen_x_to_ndx(
-		self: &Renderer<T>,
+		self: &Renderer,
 		x : u32,
 	) -> f32 {
-		x as f32 / self.windowing.get_win_w() as f32 * 2_f32 - 1_f32
+		x as f32 / self.width() as f32 * 2_f32 - 1_f32
 	}
 
 	pub fn screen_y_to_ndy(
-		self: &Renderer<T>,
+		self: &Renderer,
 		y : u32,
 	) -> f32 {
-		(1_f32 - (y as f32 / self.windowing.get_win_h() as f32)) * 2_f32 - 1_f32
+		(1_f32 - (y as f32 / self.height() as f32)) * 2_f32 - 1_f32
 	}
 
 	pub fn screen_coords_to_ndc(
-		self: &Renderer<T>,
+		self: &Renderer,
 		c : ScreenCoords,
 	) -> Point {
 		Point::new(self.screen_x_to_ndx(c.x), self.screen_y_to_ndy(c.y), 0_f32)
 	}
 
 	pub fn ndx_to_screen_x(
-		self: &Renderer<T>,
+		self: &Renderer,
 		x : f32,
 	) -> u32 {
-		f32::round(self.windowing.get_win_w() as f32 * ((1_f32 + x) / 2_f32)) as u32
+		f32::round(self.width() as f32 * ((1_f32 + x) / 2_f32)) as u32
 	}
 
 	pub fn ndy_to_screen_y(
-		self: &Renderer<T>,
+		self: &Renderer,
 		y : f32,
 	) -> u32 {
-		f32::round(
-			self.windowing.get_win_h() as f32 * (1_f32 - ((1_f32 + y) / 2_f32)),
-		) as u32
+		f32::round(self.height() as f32 * (1_f32 - ((1_f32 + y) / 2_f32))) as u32
 	}
 
 	pub fn ndc_to_screen_coords(
-		self: &Renderer<T>,
+		self: &Renderer,
 		p : &Point,
 	) -> ScreenCoords {
 		ScreenCoords::new(self.ndx_to_screen_x(p.x), self.ndy_to_screen_y(p.y))
@@ -89,7 +156,7 @@ impl<T : WindowSystem> Renderer<T> {
 	// Draw a single triangle to the
 	// framebuffer
 	fn raster_tri(
-		self: &mut Renderer<T>,
+		self: &mut Renderer,
 		tri : &Triangle,
 	) -> () {
 		let mut x_sorted : [&Point; 3] = tri.points.each_ref();
@@ -155,14 +222,12 @@ impl<T : WindowSystem> Renderer<T> {
 				}
 
 				let lef_x : usize = usize::min(
-					(self.ndx_to_screen_x(x1) + (y * self.windowing.get_win_w()))
-						as usize,
+					(self.ndx_to_screen_x(x1) + (y * self.width())) as usize,
 					self.framebuffer.len() - 1,
 				);
 
 				let rig_x : usize = usize::min(
-					(self.ndx_to_screen_x(x2) + (y * self.windowing.get_win_w()))
-						as usize,
+					(self.ndx_to_screen_x(x2) + (y * self.width())) as usize,
 					self.framebuffer.len() - 1,
 				);
 
@@ -176,22 +241,77 @@ impl<T : WindowSystem> Renderer<T> {
 	}
 
 	// Raster all triangles
-	fn raster(self: &mut Renderer<T>) -> () {
-		self.framebuffer.fill(self.background_col.clone());
+	fn raster(self: &mut Renderer) -> () {
+		self.framebuffer.fill(self.background_col);
 
 		self.tris.clone().iter().for_each(|t : &Triangle| -> () {
 			self.raster_tri(t);
 		});
 	}
+}
 
-	pub fn step_frame(self: &mut Renderer<T>) -> () {
-		// Before we get to drawing, we must
-		// handle all X11 events
-		self.windowing.handle_events(&mut self.framebuffer);
+// Make renderer make good use of winit
+impl ApplicationHandler for Renderer {
+	fn resumed(
+		self: &mut Renderer,
+		event_loop : &ActiveEventLoop,
+	) -> () {
+	}
 
-		// Raster triangles
-		self.raster();
+	fn window_event(
+		self: &mut Renderer,
+		event_loop : &ActiveEventLoop,
+		id : WindowId,
+		event : WindowEvent,
+	) -> () {
+		match event {
+			WindowEvent::RedrawRequested => {
+				//Perform user written update function
+				(self.update_fn)(self);
 
-		self.windowing.draw_frame(&mut self.framebuffer);
+				// Correct internal surface size
+				self
+					.surface
+					.resize(
+						NonZeroU32::new(self.width()).expect("Width should be non-zero"),
+						NonZeroU32::new(self.height()).expect("Height should be non-zero"),
+					)
+					.expect("Surface should be resizable");
+
+				self
+					.framebuffer
+					.resize((self.width() * self.height()) as usize, self.background_col);
+
+				self.raster();
+
+				let mut buffer : Buffer<OwnedDisplayHandle, Rc<Window>> = self
+					.surface
+					.buffer_mut()
+					.expect("Buffer should be accessible");
+
+				assert_eq!(
+					buffer.len(),
+					self.framebuffer.len(),
+					"Softbuffer buffer and renderer's framebuffer must be the same size!",
+				);
+
+				buffer.iter_mut().zip(self.framebuffer.iter()).for_each(
+					|(u, p) : (&mut u32, &Pixel)| -> () {
+						*u = ((p.r * u8::MAX as f32).round() as u32) << 16
+							| ((p.g * u8::MAX as f32).round() as u32) << 8
+							| ((p.b * u8::MAX as f32).round() as u32)
+					},
+				);
+
+				buffer.present().expect("Buffer presenting should bot fail");
+
+				self.window.request_redraw();
+			},
+
+			WindowEvent::CloseRequested => {
+				event_loop.exit();
+			},
+			_ => {},
+		}
 	}
 }

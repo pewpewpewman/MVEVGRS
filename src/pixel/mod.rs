@@ -4,7 +4,7 @@
 // front of you. Values should only
 // range from 0.0..=1.0
 
-#[derive(Clone, Default)]
+#[derive(Clone, Copy, Default)]
 
 pub struct Pixel {
 	pub r : f32,
