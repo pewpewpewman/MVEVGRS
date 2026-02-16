@@ -53,7 +53,7 @@ impl Renderer {
 
 		let tris : Vec<Triangle> = Vec::new();
 
-		let mut event_loop : EventLoop<()> = EventLoop::new()
+		let event_loop : EventLoop<()> = EventLoop::new()
 			.map_err(|e : EventLoopError| -> String { e.to_string() })?;
 
 		event_loop.set_control_flow(ControlFlow::Poll);
@@ -182,19 +182,6 @@ impl Renderer {
 		// can be under one loop
 		let bounds : [u32; 3] = [top_y, mid_y, bot_y];
 
-		// Values in NDC that are needed for
-		// point slope later Highest Y value
-		let y_t : f32 = y_sorted[0].y;
-
-		// Lowest Y value
-		let y_b : f32 = y_sorted[2].y;
-
-		// X coord of upper Y point
-		let x_t : f32 = y_sorted[0].x;
-
-		// X coord of lower Y Point
-		let x_b : f32 = y_sorted[2].x;
-
 		for i in 0..=1 {
 			let i : usize = i;
 
@@ -261,7 +248,7 @@ impl ApplicationHandler for Renderer {
 	fn window_event(
 		self: &mut Renderer,
 		event_loop : &ActiveEventLoop,
-		id : WindowId,
+		_id : WindowId,
 		event : WindowEvent,
 	) -> () {
 		match event {

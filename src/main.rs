@@ -10,7 +10,7 @@ use crate::triangle::{Point, Triangle};
 fn main() -> Result<(), ()> {
 	Renderer::run(
 		|r : &mut Renderer| -> () {
-			let mut tri : Triangle = Triangle::new(
+			let tri : Triangle = Triangle::new(
 				Point::new(-1_f32, 0_f32, 0_f32),
 				Point::new(0_f32, 0_f32, 0_f32),
 				Point::new(1_f32, 0_f32, 0_f32),
@@ -19,7 +19,7 @@ fn main() -> Result<(), ()> {
 			r.tris.push(tri);
 		},
 		|r : &mut Renderer| -> () {
-			let t : f32 = 5_f32;
+			let t : f32 = 6_f32;
 
 			let tri : &mut Triangle = &mut r.tris[0];
 
