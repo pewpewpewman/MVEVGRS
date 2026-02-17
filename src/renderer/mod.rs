@@ -1,23 +1,28 @@
 // Module that handles the main loop of
 // drawing and rendering.
+
+use std::cmp::Ordering;
 use std::num::NonZeroU32;
 use std::rc::Rc;
+use std::time::Instant;
 
 use softbuffer::{Buffer, Context, SoftBufferError, Surface};
 use winit::application::ApplicationHandler;
 use winit::dpi::{PhysicalSize, Size};
 use winit::error::{EventLoopError, OsError};
-use winit::event::WindowEvent;
+use winit::event::{ElementState, KeyEvent, WindowEvent};
 use winit::event_loop::{
 	ActiveEventLoop,
 	ControlFlow,
 	EventLoop,
 	OwnedDisplayHandle,
 };
-use winit::window::{Icon, Window, WindowAttributes, WindowId};
+use winit::keyboard::{KeyCode, PhysicalKey};
+use winit::monitor::VideoModeHandle;
+use winit::window::{Fullscreen, Icon, Window, WindowAttributes, WindowId};
 
 use crate::pixel::Pixel;
-use crate::triangle::{Point, ScreenCoords, Triangle, lin_interp};
+use crate::triangle::{lin_interp, Point, ScreenCoords, Triangle};
 
 pub struct Renderer {
 	// Winit window to draw to - could prolly be done with just a refernce and
@@ -33,15 +38,13 @@ pub struct Renderer {
 	// Triangles to be rastered
 	pub tris : Vec<Triangle>,
 	// Update function to run before drawing each frame
-	pub update_fn : UserFunction,
+	pub update_fn : Option<Box<dyn FnMut(&mut Renderer) -> ()>>,
 }
 
-type UserFunction = fn(&mut Renderer) -> ();
-
 impl Renderer {
-	pub fn run(
-		init_fn : UserFunction,
-		update_fn : UserFunction,
+	pub fn run<F : FnOnce(&mut Renderer) -> ()>(
+		init_fn : F,
+		update_fn : Option<Box<dyn FnMut(&mut Renderer) -> ()>>,
 	) -> Result<(), String> {
 		let win_w : u32 = 1024;
 		let win_h : u32 = 768;
@@ -241,7 +244,7 @@ impl Renderer {
 impl ApplicationHandler for Renderer {
 	fn resumed(
 		self: &mut Renderer,
-		event_loop : &ActiveEventLoop,
+		_event_loop : &ActiveEventLoop,
 	) -> () {
 	}
 
@@ -254,7 +257,17 @@ impl ApplicationHandler for Renderer {
 		match event {
 			WindowEvent::RedrawRequested => {
 				//Perform user written update function
-				(self.update_fn)(self);
+				//Borrow checker gets mad at me for accessing the function
+				//field and passing it the mut ref so we gotta do some trickery
+				let mut temp : Option<Box<dyn FnMut(&mut Renderer) -> ()>> =
+					self.update_fn.take();
+				//It is possible the user didn't even provide an update fn
+				if let Some(update_fn) = &mut temp {
+					let update_fn : &mut Box<dyn FnMut(&mut Renderer) -> ()> = update_fn;
+
+					(update_fn)(self);
+				}
+				self.update_fn = temp;
 
 				// Correct internal surface size
 				self
@@ -293,6 +306,27 @@ impl ApplicationHandler for Renderer {
 				buffer.present().expect("Buffer presenting should bot fail");
 
 				self.window.request_redraw();
+			},
+
+			WindowEvent::KeyboardInput {
+				event,
+				..
+			} => {
+				let event : KeyEvent = event;
+
+				if event.physical_key == PhysicalKey::Code(KeyCode::F11)
+					&& !event.repeat
+					&& event.state == ElementState::Pressed
+				{
+					self
+						.window
+						.set_fullscreen(self.window.fullscreen().map_or_else(
+							|| -> Option<Fullscreen> { Some(Fullscreen::Borderless(None)) },
+							|_ : Fullscreen| -> Option<Fullscreen> { None },
+						));
+
+					self.window.fullscreen();
+				}
 			},
 
 			WindowEvent::CloseRequested => {
