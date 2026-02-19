@@ -22,7 +22,7 @@ use winit::monitor::VideoModeHandle;
 use winit::window::{Fullscreen, Icon, Window, WindowAttributes, WindowId};
 
 use crate::pixel::Pixel;
-use crate::triangle::{lin_interp, Point, ScreenCoords, Triangle};
+use crate::triangle::{Point, ScreenCoord, Triangle};
 
 pub struct Renderer {
 	// Winit window to draw to - could prolly be done with just a refernce and
@@ -49,7 +49,7 @@ impl Renderer {
 		let win_w : u32 = 1024;
 		let win_h : u32 = 768;
 
-		let background_col : Pixel = Pixel::new(0.0, 0.0, 0.0, 1.0);
+		let background_col : Pixel = Pixel::new(1.0, 0.0, 0.0, 1.0);
 
 		let framebuffer : Vec<Pixel> =
 			vec![background_col; (win_w * win_h) as usize];
@@ -130,7 +130,7 @@ impl Renderer {
 
 	pub fn screen_coords_to_ndc(
 		self: &Renderer,
-		c : ScreenCoords,
+		c : ScreenCoord,
 	) -> Point {
 		Point::new(self.screen_x_to_ndx(c.x), self.screen_y_to_ndy(c.y), 0_f32)
 	}
@@ -152,8 +152,8 @@ impl Renderer {
 	pub fn ndc_to_screen_coords(
 		self: &Renderer,
 		p : &Point,
-	) -> ScreenCoords {
-		ScreenCoords::new(self.ndx_to_screen_x(p.x), self.ndy_to_screen_y(p.y))
+	) -> ScreenCoord {
+		ScreenCoord::new(self.ndx_to_screen_x(p.x), self.ndy_to_screen_y(p.y))
 	}
 
 	// Draw a single triangle to the
@@ -201,11 +201,13 @@ impl Renderer {
 
 				// We can easily find the y coordinate
 				// from the side formed by 2 lines
-				let mut x1 : f32 = lin_interp(y_sorted[i].x, y_sorted[i + 1].x, t);
+				let mut x1 : f32 =
+					<f32 as glam::FloatExt>::lerp(y_sorted[i].x, y_sorted[i + 1].x, t);
 
 				let t : f32 = (y - top_y) as f32 / (bot_y - top_y) as f32;
 
-				let mut x2 : f32 = lin_interp(y_sorted[0].x, y_sorted[2].x, t);
+				let mut x2 : f32 =
+					<f32 as glam::FloatExt>::lerp(y_sorted[0].x, y_sorted[2].x, t);
 
 				if x1 > x2 {
 					std::mem::swap(&mut x1, &mut x2);
@@ -221,11 +223,12 @@ impl Renderer {
 					self.framebuffer.len() - 1,
 				);
 
-				self.framebuffer[lef_x..=rig_x].fill(if i == 0 {
-					Pixel::new(0.0, 0.0, 1.0, 1.0)
-				} else {
-					Pixel::new(1.0, 0.0, 0.0, 1.0)
-				});
+				self.framebuffer[lef_x..=rig_x].fill(Pixel::new(0.0, 0.0, 1.0, 1.0));
+				//self.framebuffer[lef_x..=rig_x].fill(if i == 0 {
+				//	Pixel::new(0.0, 0.0, 1.0, 1.0)
+				//} else {
+				//	Pixel::new(0.0, 1.0, 0.0, 1.0)
+				//});
 			}
 		}
 	}
