@@ -19,7 +19,14 @@ use winit::event_loop::{
 };
 use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::monitor::VideoModeHandle;
-use winit::window::{Fullscreen, Icon, Window, WindowAttributes, WindowId};
+use winit::window::{
+	BadIcon,
+	Fullscreen,
+	Icon,
+	Window,
+	WindowAttributes,
+	WindowId,
+};
 
 use crate::pixel::Pixel;
 use crate::triangle::{Point, ScreenCoord, Triangle};
@@ -75,7 +82,27 @@ impl Renderer {
 				.create_window(
 					WindowAttributes::default()
 						.with_inner_size(Size::Physical(PhysicalSize::new(win_w, win_h)))
-						.with_title(String::from("MVEVGS BIATCH!!")),
+						.with_title(String::from("MVEVGS BIATCH!!"))
+						.with_window_icon(Some({
+							use image::error::ImageError;
+							use image::RgbaImage;
+
+							let (rgba, width, height) : (Vec<u8>, u32, u32) = {
+								let image : RgbaImage =
+									image::load_from_memory(include_bytes!("../../icon.png"))
+										.map_err(|e : ImageError| -> String { e.to_string() })?
+										.into_rgba8();
+
+								let (width, height) : (u32, u32) = image.dimensions();
+
+								let rgba : Vec<u8> = image.into_raw();
+								dbg!(rgba.len());
+								(rgba, width, height)
+							};
+
+							Icon::from_rgba(rgba, width, height)
+								.map_err(|e : BadIcon| -> String { e.to_string() })?
+						})),
 				)
 				.map_err(|e : OsError| -> String { e.to_string() })?,
 		);
