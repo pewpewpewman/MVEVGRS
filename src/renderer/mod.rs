@@ -1,11 +1,12 @@
 // Module that handles the main loop of
 // drawing and rendering.
-
 use std::cmp::Ordering;
+use std::mem::MaybeUninit;
 use std::num::NonZeroU32;
 use std::rc::Rc;
 use std::time::Instant;
 
+use glam::{UVec2, Vec3};
 use softbuffer::{Buffer, Context, SoftBufferError, Surface};
 use winit::application::ApplicationHandler;
 use winit::dpi::{PhysicalSize, Size};
@@ -29,14 +30,15 @@ use winit::window::{
 };
 
 use crate::pixel::Pixel;
-use crate::triangle::{Point, ScreenCoord, Triangle};
+use crate::triangle::Triangle;
 
 pub struct Renderer {
 	// Winit window to draw to - could prolly be done with just a refernce and
 	// lifetimes but bro i dont wanna write all of the life time annotations
 	// :sob:
+	// Window is actually initalized in resumed and not new, it is left unitialized until then
 	window : Rc<Window>,
-	// Suface that pixel data is written to
+	// Suface that pixel data is written to - initialization is done in resumed, not new
 	surface : Surface<OwnedDisplayHandle, Rc<Window>>,
 	// Main frame buffer that is written to
 	pub framebuffer : Vec<Pixel>,
@@ -53,74 +55,31 @@ impl Renderer {
 		init_fn : F,
 		update_fn : Option<Box<dyn FnMut(&mut Renderer) -> ()>>,
 	) -> Result<(), String> {
-		let win_w : u32 = 1024;
-		let win_h : u32 = 768;
+		let win_w : u32 = 500;
+		let win_h : u32 = 500;
 
-		let background_col : Pixel = Pixel::new(1.0, 0.0, 0.0, 1.0);
+		let background_col : Pixel = Pixel::new(1.0, 0.0, 0.0, 0.5);
 
 		let framebuffer : Vec<Pixel> =
 			vec![background_col; (win_w * win_h) as usize];
 
 		let tris : Vec<Triangle> = Vec::new();
 
-		let event_loop : EventLoop<()> = EventLoop::new()
-			.map_err(|e : EventLoopError| -> String { e.to_string() })?;
+		let win_init_data : Option<Box<WindowAttributes>> = Some(Box::new());
 
-		event_loop.set_control_flow(ControlFlow::Poll);
-
-		// Winit docs says making the window
-		// from the EventLoop (as opposeed to
-		// the ActiveEventLoop) is bad and
-		// depricated, however I don't want the
-		// Renderer to redundantly store things
-		// the winit window is already
-		// tracking so the only way to
-		// initialize those values is applying
-		// them in the Renderer's contructor
-		let window : Rc<Window> = Rc::new(
-			event_loop
-				.create_window(
-					WindowAttributes::default()
-						.with_inner_size(Size::Physical(PhysicalSize::new(win_w, win_h)))
-						.with_title(String::from("MVEVGS BIATCH!!"))
-						.with_window_icon(Some({
-							use image::error::ImageError;
-							use image::RgbaImage;
-
-							let (rgba, width, height) : (Vec<u8>, u32, u32) = {
-								let image : RgbaImage =
-									image::load_from_memory(include_bytes!("../../icon.png"))
-										.map_err(|e : ImageError| -> String { e.to_string() })?
-										.into_rgba8();
-
-								let (width, height) : (u32, u32) = image.dimensions();
-
-								let rgba : Vec<u8> = image.into_raw();
-								dbg!(rgba.len());
-								(rgba, width, height)
-							};
-
-							Icon::from_rgba(rgba, width, height)
-								.map_err(|e : BadIcon| -> String { e.to_string() })?
-						})),
-				)
-				.map_err(|e : OsError| -> String { e.to_string() })?,
-		);
-
-		// Softbuffer context
-		let context : Context<OwnedDisplayHandle> =
-			Context::new(event_loop.owned_display_handle())
-				.map_err(|e : SoftBufferError| -> String { e.to_string() })?;
+		let window : Rc<Window> = unsafe { Rc::from_raw(std::ptr::null()) };
 
 		// Softbuffer surface pixels are written
-		// to
-		let surface : Surface<OwnedDisplayHandle, Rc<Window>> =
-			Surface::new(&context, window.clone())
-				.map_err(|e : SoftBufferError| -> String { e.to_string() })?;
+		// to, initalized later in resumed()
+		let surface : Surface<OwnedDisplayHandle, Rc<Window>> = unsafe {
+			MaybeUninit::<Surface<OwnedDisplayHandle, Rc<Window>>>::uninit()
+				.assume_init()
+		};
 
 		let mut renderer : Renderer = Renderer {
 			surface,
 			window,
+			win_init_data,
 			framebuffer,
 			background_col,
 			tris,
@@ -128,6 +87,10 @@ impl Renderer {
 		};
 
 		(init_fn)(&mut renderer);
+
+		let event_loop : EventLoop<()> = EventLoop::new().unwrap();
+
+		event_loop.set_control_flow(ControlFlow::Poll);
 
 		event_loop
 			.run_app(&mut renderer)
@@ -157,9 +120,9 @@ impl Renderer {
 
 	pub fn screen_coords_to_ndc(
 		self: &Renderer,
-		c : ScreenCoord,
-	) -> Point {
-		Point::new(self.screen_x_to_ndx(c.x), self.screen_y_to_ndy(c.y), 0_f32)
+		c : UVec2,
+	) -> Vec3 {
+		Vec3::new(self.screen_x_to_ndx(c.x), self.screen_y_to_ndy(c.y), 0_f32)
 	}
 
 	pub fn ndx_to_screen_x(
@@ -178,9 +141,9 @@ impl Renderer {
 
 	pub fn ndc_to_screen_coords(
 		self: &Renderer,
-		p : &Point,
-	) -> ScreenCoord {
-		ScreenCoord::new(self.ndx_to_screen_x(p.x), self.ndy_to_screen_y(p.y))
+		p : &Vec3,
+	) -> UVec2 {
+		UVec2::new(self.ndx_to_screen_x(p.x), self.ndy_to_screen_y(p.y))
 	}
 
 	// Draw a single triangle to the
@@ -189,15 +152,15 @@ impl Renderer {
 		self: &mut Renderer,
 		tri : &Triangle,
 	) -> () {
-		let mut x_sorted : [&Point; 3] = tri.points.each_ref();
+		let mut x_sorted : [&Vec3; 3] = tri.points.each_ref();
 
-		x_sorted.sort_by(|a : &&Point, b : &&Point| -> std::cmp::Ordering {
+		x_sorted.sort_by(|a : &&Vec3, b : &&Vec3| -> std::cmp::Ordering {
 			a.x.total_cmp(&b.x)
 		});
 
-		let mut y_sorted : [&Point; 3] = tri.points.each_ref();
+		let mut y_sorted : [&Vec3; 3] = tri.points.each_ref();
 
-		y_sorted.sort_by(|a : &&Point, b : &&Point| -> std::cmp::Ordering {
+		y_sorted.sort_by(|a : &&Vec3, b : &&Vec3| -> std::cmp::Ordering {
 			b.y.total_cmp(&a.y)
 		});
 
@@ -274,8 +237,53 @@ impl Renderer {
 impl ApplicationHandler for Renderer {
 	fn resumed(
 		self: &mut Renderer,
-		_event_loop : &ActiveEventLoop,
+		event_loop : &ActiveEventLoop,
 	) -> () {
+		self.window = Rc::new(
+			event_loop
+				.create_window(
+					WindowAttributes::default()
+						.with_inner_size(Size::Physical(PhysicalSize::new(win_w, win_h)))
+						.with_title(String::from("MVEVGS BIATCH!!"))
+						.with_window_icon(Some({
+							use image::error::ImageError;
+							use image::RgbaImage;
+
+							let (rgba, width, height) : (Vec<u8>, u32, u32) = {
+								let image : RgbaImage = image::load_from_memory(
+									include_bytes!("../../scaled_icon.png"),
+								)
+								.map_err(|e : ImageError| -> String { e.to_string() })?
+								.into_rgba8();
+
+								let (width, height) : (u32, u32) = image.dimensions();
+
+								let rgba : Vec<u8> = image.into_raw();
+								(rgba, width, height)
+							};
+
+							Icon::from_rgba(rgba, width, height)
+								.map_err(|e : BadIcon| -> String { e.to_string() })?
+						}))
+						.with_transparent(true)
+						.with_visible(false),
+				)
+				.expect("Window creation should be unfailable!"),
+		);
+
+		// Softbuffer context
+		let context : Context<OwnedDisplayHandle> =
+			Context::new(event_loop.owned_display_handle()).unwrap();
+
+		println!("Before");
+
+		dbg!(&self.window.clone());
+
+		println!("After");
+
+		// Softbuffer surface pixels are written
+		// to
+		self.surface = Surface::new(&context, self.window.clone()).unwrap();
 	}
 
 	fn window_event(
@@ -329,11 +337,11 @@ impl ApplicationHandler for Renderer {
 					|(u, p) : (&mut u32, &Pixel)| -> () {
 						*u = ((p.r * u8::MAX as f32).round() as u32) << 16
 							| ((p.g * u8::MAX as f32).round() as u32) << 8
-							| ((p.b * u8::MAX as f32).round() as u32)
+							| ((p.b * u8::MAX as f32).round() as u32);
 					},
 				);
 
-				buffer.present().expect("Buffer presenting should bot fail");
+				buffer.present().expect("Buffer presenting should not fail");
 
 				self.window.request_redraw();
 			},

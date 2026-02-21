@@ -7,7 +7,7 @@ mod triangle;
 use std::time::{Duration, Instant};
 
 use crate::renderer::Renderer;
-use crate::triangle::{Point, Triangle};
+use crate::triangle::Triangle;
 
 fn main() -> Result<(), ()> {
 	let mut t : f32 = 0_f32;
