@@ -167,9 +167,9 @@ impl<'a> ApplicationHandler for WindowRenderTarget<'a> {
 					.iter_mut()
 					.zip(self.source.framebuffer.iter())
 					.for_each(|(u, p) : (&mut u32, &Pixel)| -> () {
-						*u = ((p.r * u8::MAX as f32).round() as u32) << 16
-							| ((p.g * u8::MAX as f32).round() as u32) << 8
-							| ((p.b * u8::MAX as f32).round() as u32);
+						*u = ((p.x * u8::MAX as f32).round() as u32) << 16
+							| ((p.y * u8::MAX as f32).round() as u32) << 8
+							| ((p.z * u8::MAX as f32).round() as u32);
 					});
 
 				buffer.present().expect("Buffer presenting should not fail");

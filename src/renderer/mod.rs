@@ -208,7 +208,7 @@ impl Default for RendererSettings {
 			width : 500,
 			height : 500,
 			background_col : Pixel::new(1.0, 0.5, 0.75, 1.0),
-			show_tri_div : true,
+			show_tri_div : false,
 		}
 	}
 }

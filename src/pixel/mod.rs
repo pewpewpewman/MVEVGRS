@@ -4,27 +4,8 @@
 // front of you. Values should only
 // range from 0.0..=1.0
 
-#[derive(Clone, Copy, Default)]
+use glam::Vec4;
 
-pub struct Pixel {
-	pub r : f32,
-	pub g : f32,
-	pub b : f32,
-	pub a : f32,
-}
-
-impl Pixel {
-	pub fn new(
-		r : f32,
-		g : f32,
-		b : f32,
-		a : f32,
-	) -> Pixel {
-		Pixel {
-			r,
-			g,
-			b,
-			a,
-		}
-	}
-}
+//I really want Pixels to be backed by glam's very advanced and fancy Vec4 type, but that comes at
+//the cost of not being able to use .rgba, we have to use .xyzw, quite sad :(
+pub type Pixel = Vec4;
