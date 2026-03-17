@@ -1,10 +1,5 @@
 // Module that handles the main loop of
 // drawing and rendering.
-use std::cmp::Ordering;
-use std::mem::MaybeUninit;
-use std::num::NonZeroU32;
-use std::rc::Rc;
-use std::time::Instant;
 
 use glam::{UVec2, Vec3};
 
@@ -15,7 +10,7 @@ pub struct Renderer {
 	// Main frame buffer that is written to
 	pub framebuffer : Vec<Pixel>,
 	//Settings for how to draw things
-	pub render_settings : RendererSettings,
+	pub renderer_settings : RendererSettings,
 	// Triangles to be rastered
 	pub tris : Vec<Triangle>,
 	// Update function to run before drawing each frame
@@ -24,21 +19,25 @@ pub struct Renderer {
 
 impl Renderer {
 	pub fn new(
-		render_settings : RendererSettings,
+		renderer_settings : RendererSettings,
 		tris : Vec<Triangle>,
 		update_fn : Option<Box<dyn FnMut(&mut Renderer) -> ()>>,
 	) -> Renderer {
 		Renderer {
-			framebuffer : Vec::<Pixel>::new(),
-			render_settings,
+			framebuffer : vec![
+				renderer_settings.background_col;
+				(renderer_settings.width * renderer_settings.height)
+					as usize
+			],
+			renderer_settings,
 			tris,
 			update_fn,
 		}
 	}
 
-	pub fn width(self: &Renderer) -> u32 { self.render_settings.width }
+	pub fn width(self: &Renderer) -> u32 { self.renderer_settings.width }
 
-	pub fn height(self: &Renderer) -> u32 { self.render_settings.height }
+	pub fn height(self: &Renderer) -> u32 { self.renderer_settings.height }
 
 	// Helpful conversion functions between
 	// NDC and pixel coordinates and vice
@@ -152,7 +151,7 @@ impl Renderer {
 					self.framebuffer.len() - 1,
 				);
 
-				if !self.render_settings.show_tri_div {
+				if !self.renderer_settings.show_tri_div {
 					self.framebuffer[lef_x..=rig_x].fill(Pixel::new(0.0, 0.0, 1.0, 1.0));
 				} else {
 					self.framebuffer[lef_x..=rig_x].fill(if i == 0 {
@@ -167,7 +166,7 @@ impl Renderer {
 
 	// Raster all triangles
 	fn raster(self: &mut Renderer) -> () {
-		self.framebuffer.fill(self.render_settings.background_col);
+		self.framebuffer.fill(self.renderer_settings.background_col);
 
 		self.tris.clone().iter().for_each(|t : &Triangle| -> () {
 			self.raster_tri(t);
@@ -179,17 +178,18 @@ impl Renderer {
 
 		//Calling a function that acts on its own struct causes some borrow checker problems, let's
 		//do some shenanigans to please it
-		let temp : Option<Box<dyn FnMut(&mut Renderer) -> ()>> =
+		let mut temp : Option<Box<dyn FnMut(&mut Renderer) -> ()>> =
 			self.update_fn.take();
 
-		if let Some(f) = temp {
-			let mut f : Box<dyn FnMut(&mut Renderer) -> ()> = f;
+		if let Some(f) = &mut temp {
+			let mut f : &mut Box<dyn FnMut(&mut Renderer) -> ()> = f;
 			(f)(self);
 		}
+
+		self.update_fn = temp;
 	}
 }
 
-#[derive(Default)]
 pub struct RendererSettings {
 	// INTERNAL render width and height - may or may not match up with what the target for
 	// rendering is
@@ -200,4 +200,15 @@ pub struct RendererSettings {
 	// Triangles are drawn in 2 phases, set this to true if you want the second phase to have
 	// inverted colors
 	pub show_tri_div : bool,
+}
+
+impl Default for RendererSettings {
+	fn default() -> RendererSettings {
+		RendererSettings {
+			width : 500,
+			height : 500,
+			background_col : Pixel::new(1.0, 0.5, 0.75, 1.0),
+			show_tri_div : true,
+		}
+	}
 }

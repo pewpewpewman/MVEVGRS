@@ -3,7 +3,7 @@ mod pixel;
 mod triangle;
 mod window_render_target;
 
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use crate::renderer::{Renderer, RendererSettings};
 use crate::triangle::Triangle;
@@ -12,7 +12,7 @@ use crate::window_render_target::WindowRenderTarget;
 fn main() -> Result<(), ()> {
 	let mut t : f32 = 0_f32;
 
-	let mut start_time : Instant = Instant::now();
+	let start_time : Instant = Instant::now();
 
 	let mut renderer : Renderer = Renderer::new(
 		RendererSettings::default(),

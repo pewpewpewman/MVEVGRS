@@ -1,10 +1,10 @@
 use std::num::NonZeroU32;
 use std::rc::Rc;
 
-use softbuffer::{Buffer, Context, SoftBufferError, Surface};
+use softbuffer::{Buffer, Context, Surface};
 use winit::application::ApplicationHandler;
 use winit::dpi::{PhysicalSize, Size};
-use winit::error::{EventLoopError, OsError};
+use winit::error::EventLoopError;
 use winit::event::{ElementState, KeyEvent, WindowEvent};
 use winit::event_loop::{
 	ActiveEventLoop,
@@ -13,15 +13,7 @@ use winit::event_loop::{
 	OwnedDisplayHandle,
 };
 use winit::keyboard::{KeyCode, PhysicalKey};
-use winit::monitor::VideoModeHandle;
-use winit::window::{
-	BadIcon,
-	Fullscreen,
-	Icon,
-	Window,
-	WindowAttributes,
-	WindowId,
-};
+use winit::window::{Fullscreen, Icon, Window, WindowAttributes, WindowId};
 
 use crate::pixel::Pixel;
 use crate::renderer::Renderer;
@@ -51,7 +43,9 @@ pub struct WindowRenderTarget<'a> {
 }
 
 impl<'a> WindowRenderTarget<'a> {
-	pub fn new(source : &'a mut Renderer) -> Result<WindowRenderTarget, String> {
+	pub fn new(
+		source : &'a mut Renderer
+	) -> Result<WindowRenderTarget<'a>, String> {
 		let event_loop : EventLoop<()> = EventLoop::new().unwrap();
 
 		event_loop.set_control_flow(ControlFlow::Poll);
@@ -85,7 +79,6 @@ impl<'a> ApplicationHandler for WindowRenderTarget<'a> {
 						)))
 						.with_title(String::from("MVEVGS BIATCH!!"))
 						.with_window_icon(Some({
-							use image::error::ImageError;
 							use image::RgbaImage;
 
 							let (rgba, width, height) : (Vec<u8>, u32, u32) = {
