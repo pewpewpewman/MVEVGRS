@@ -7,99 +7,38 @@ use std::rc::Rc;
 use std::time::Instant;
 
 use glam::{UVec2, Vec3};
-use softbuffer::{Buffer, Context, SoftBufferError, Surface};
-use winit::application::ApplicationHandler;
-use winit::dpi::{PhysicalSize, Size};
-use winit::error::{EventLoopError, OsError};
-use winit::event::{ElementState, KeyEvent, WindowEvent};
-use winit::event_loop::{
-	ActiveEventLoop,
-	ControlFlow,
-	EventLoop,
-	OwnedDisplayHandle,
-};
-use winit::keyboard::{KeyCode, PhysicalKey};
-use winit::monitor::VideoModeHandle;
-use winit::window::{
-	BadIcon,
-	Fullscreen,
-	Icon,
-	Window,
-	WindowAttributes,
-	WindowId,
-};
 
 use crate::pixel::Pixel;
 use crate::triangle::Triangle;
 
 pub struct Renderer {
-	// Winit window to draw to - could prolly be done with just a refernce and
-	// lifetimes but bro i dont wanna write all of the life time annotations
-	// :sob:
-	// Window is actually initalized in resumed and not new, it is left unitialized until then
-	window : Rc<Window>,
-	// Suface that pixel data is written to - initialization is done in resumed, not new
-	surface : Surface<OwnedDisplayHandle, Rc<Window>>,
 	// Main frame buffer that is written to
 	pub framebuffer : Vec<Pixel>,
-	// Go to value for filling the frame buffer
-	pub background_col : Pixel,
+	//Settings for how to draw things
+	pub render_settings : RendererSettings,
 	// Triangles to be rastered
 	pub tris : Vec<Triangle>,
 	// Update function to run before drawing each frame
-	pub update_fn : Option<Box<dyn FnMut(&mut Renderer) -> ()>>,
+	update_fn : Option<Box<dyn FnMut(&mut Renderer) -> ()>>,
 }
 
 impl Renderer {
-	pub fn run<F : FnOnce(&mut Renderer) -> ()>(
-		init_fn : F,
+	pub fn new(
+		render_settings : RendererSettings,
+		tris : Vec<Triangle>,
 		update_fn : Option<Box<dyn FnMut(&mut Renderer) -> ()>>,
-	) -> Result<(), String> {
-		let win_w : u32 = 500;
-		let win_h : u32 = 500;
-
-		let background_col : Pixel = Pixel::new(1.0, 0.0, 0.0, 0.5);
-
-		let framebuffer : Vec<Pixel> =
-			vec![background_col; (win_w * win_h) as usize];
-
-		let tris : Vec<Triangle> = Vec::new();
-
-		let win_init_data : Option<Box<WindowAttributes>> = Some(Box::new());
-
-		let window : Rc<Window> = unsafe { Rc::from_raw(std::ptr::null()) };
-
-		// Softbuffer surface pixels are written
-		// to, initalized later in resumed()
-		let surface : Surface<OwnedDisplayHandle, Rc<Window>> = unsafe {
-			MaybeUninit::<Surface<OwnedDisplayHandle, Rc<Window>>>::uninit()
-				.assume_init()
-		};
-
-		let mut renderer : Renderer = Renderer {
-			surface,
-			window,
-			win_init_data,
-			framebuffer,
-			background_col,
+	) -> Renderer {
+		Renderer {
+			framebuffer : Vec::<Pixel>::new(),
+			render_settings,
 			tris,
 			update_fn,
-		};
-
-		(init_fn)(&mut renderer);
-
-		let event_loop : EventLoop<()> = EventLoop::new().unwrap();
-
-		event_loop.set_control_flow(ControlFlow::Poll);
-
-		event_loop
-			.run_app(&mut renderer)
-			.map_err(|e : EventLoopError| -> String { e.to_string() })
+		}
 	}
 
-	pub fn width(self: &Renderer) -> u32 { self.window.inner_size().width }
+	pub fn width(self: &Renderer) -> u32 { self.render_settings.width }
 
-	pub fn height(self: &Renderer) -> u32 { self.window.inner_size().height }
+	pub fn height(self: &Renderer) -> u32 { self.render_settings.height }
 
 	// Helpful conversion functions between
 	// NDC and pixel coordinates and vice
@@ -213,164 +152,52 @@ impl Renderer {
 					self.framebuffer.len() - 1,
 				);
 
-				self.framebuffer[lef_x..=rig_x].fill(Pixel::new(0.0, 0.0, 1.0, 1.0));
-				//self.framebuffer[lef_x..=rig_x].fill(if i == 0 {
-				//	Pixel::new(0.0, 0.0, 1.0, 1.0)
-				//} else {
-				//	Pixel::new(0.0, 1.0, 0.0, 1.0)
-				//});
+				if !self.render_settings.show_tri_div {
+					self.framebuffer[lef_x..=rig_x].fill(Pixel::new(0.0, 0.0, 1.0, 1.0));
+				} else {
+					self.framebuffer[lef_x..=rig_x].fill(if i == 0 {
+						Pixel::new(0.0, 0.0, 1.0, 1.0)
+					} else {
+						Pixel::new(0.0, 1.0, 0.0, 1.0)
+					});
+				}
 			}
 		}
 	}
 
 	// Raster all triangles
 	fn raster(self: &mut Renderer) -> () {
-		self.framebuffer.fill(self.background_col);
+		self.framebuffer.fill(self.render_settings.background_col);
 
 		self.tris.clone().iter().for_each(|t : &Triangle| -> () {
 			self.raster_tri(t);
 		});
 	}
-}
 
-// Make renderer make good use of winit
-impl ApplicationHandler for Renderer {
-	fn resumed(
-		self: &mut Renderer,
-		event_loop : &ActiveEventLoop,
-	) -> () {
-		self.window = Rc::new(
-			event_loop
-				.create_window(
-					WindowAttributes::default()
-						.with_inner_size(Size::Physical(PhysicalSize::new(win_w, win_h)))
-						.with_title(String::from("MVEVGS BIATCH!!"))
-						.with_window_icon(Some({
-							use image::error::ImageError;
-							use image::RgbaImage;
+	pub fn frame_step(self: &mut Renderer) -> () {
+		self.raster();
 
-							let (rgba, width, height) : (Vec<u8>, u32, u32) = {
-								let image : RgbaImage = image::load_from_memory(
-									include_bytes!("../../scaled_icon.png"),
-								)
-								.map_err(|e : ImageError| -> String { e.to_string() })?
-								.into_rgba8();
+		//Calling a function that acts on its own struct causes some borrow checker problems, let's
+		//do some shenanigans to please it
+		let temp : Option<Box<dyn FnMut(&mut Renderer) -> ()>> =
+			self.update_fn.take();
 
-								let (width, height) : (u32, u32) = image.dimensions();
-
-								let rgba : Vec<u8> = image.into_raw();
-								(rgba, width, height)
-							};
-
-							Icon::from_rgba(rgba, width, height)
-								.map_err(|e : BadIcon| -> String { e.to_string() })?
-						}))
-						.with_transparent(true)
-						.with_visible(false),
-				)
-				.expect("Window creation should be unfailable!"),
-		);
-
-		// Softbuffer context
-		let context : Context<OwnedDisplayHandle> =
-			Context::new(event_loop.owned_display_handle()).unwrap();
-
-		println!("Before");
-
-		dbg!(&self.window.clone());
-
-		println!("After");
-
-		// Softbuffer surface pixels are written
-		// to
-		self.surface = Surface::new(&context, self.window.clone()).unwrap();
-	}
-
-	fn window_event(
-		self: &mut Renderer,
-		event_loop : &ActiveEventLoop,
-		_id : WindowId,
-		event : WindowEvent,
-	) -> () {
-		match event {
-			WindowEvent::RedrawRequested => {
-				//Perform user written update function
-				//Borrow checker gets mad at me for accessing the function
-				//field and passing it the mut ref so we gotta do some trickery
-				let mut temp : Option<Box<dyn FnMut(&mut Renderer) -> ()>> =
-					self.update_fn.take();
-				//It is possible the user didn't even provide an update fn
-				if let Some(update_fn) = &mut temp {
-					let update_fn : &mut Box<dyn FnMut(&mut Renderer) -> ()> = update_fn;
-
-					(update_fn)(self);
-				}
-				self.update_fn = temp;
-
-				// Correct internal surface size
-				self
-					.surface
-					.resize(
-						NonZeroU32::new(self.width()).expect("Width should be non-zero"),
-						NonZeroU32::new(self.height()).expect("Height should be non-zero"),
-					)
-					.expect("Surface should be resizable");
-
-				self
-					.framebuffer
-					.resize((self.width() * self.height()) as usize, self.background_col);
-
-				self.raster();
-
-				let mut buffer : Buffer<OwnedDisplayHandle, Rc<Window>> = self
-					.surface
-					.buffer_mut()
-					.expect("Buffer should be accessible");
-
-				assert_eq!(
-					buffer.len(),
-					self.framebuffer.len(),
-					"Softbuffer buffer and renderer's framebuffer must be the same size!",
-				);
-
-				buffer.iter_mut().zip(self.framebuffer.iter()).for_each(
-					|(u, p) : (&mut u32, &Pixel)| -> () {
-						*u = ((p.r * u8::MAX as f32).round() as u32) << 16
-							| ((p.g * u8::MAX as f32).round() as u32) << 8
-							| ((p.b * u8::MAX as f32).round() as u32);
-					},
-				);
-
-				buffer.present().expect("Buffer presenting should not fail");
-
-				self.window.request_redraw();
-			},
-
-			WindowEvent::KeyboardInput {
-				event,
-				..
-			} => {
-				let event : KeyEvent = event;
-
-				if event.physical_key == PhysicalKey::Code(KeyCode::F11)
-					&& !event.repeat
-					&& event.state == ElementState::Pressed
-				{
-					self
-						.window
-						.set_fullscreen(self.window.fullscreen().map_or_else(
-							|| -> Option<Fullscreen> { Some(Fullscreen::Borderless(None)) },
-							|_ : Fullscreen| -> Option<Fullscreen> { None },
-						));
-
-					self.window.fullscreen();
-				}
-			},
-
-			WindowEvent::CloseRequested => {
-				event_loop.exit();
-			},
-			_ => {},
+		if let Some(f) = temp {
+			let mut f : Box<dyn FnMut(&mut Renderer) -> ()> = f;
+			(f)(self);
 		}
 	}
+}
+
+#[derive(Default)]
+pub struct RendererSettings {
+	// INTERNAL render width and height - may or may not match up with what the target for
+	// rendering is
+	pub width : u32,
+	pub height : u32,
+	// Go to value for filling the frame buffer
+	pub background_col : Pixel,
+	// Triangles are drawn in 2 phases, set this to true if you want the second phase to have
+	// inverted colors
+	pub show_tri_div : bool,
 }

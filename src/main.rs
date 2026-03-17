@@ -1,26 +1,22 @@
 mod renderer;
-
 mod pixel;
-
 mod triangle;
+mod window_render_target;
 
 use std::time::{Duration, Instant};
 
-use crate::renderer::Renderer;
+use crate::renderer::{Renderer, RendererSettings};
 use crate::triangle::Triangle;
+use crate::window_render_target::WindowRenderTarget;
 
 fn main() -> Result<(), ()> {
 	let mut t : f32 = 0_f32;
 
 	let mut start_time : Instant = Instant::now();
 
-	Renderer::run(
-		|r : &mut Renderer| -> () {
-			let tri : Triangle = Triangle::default();
-
-			r.tris.push(tri);
-			r.tris.push(tri);
-		},
+	let mut renderer : Renderer = Renderer::new(
+		RendererSettings::default(),
+		vec![Triangle::default(); 2],
 		Some(Box::new(move |r : &mut Renderer| -> () {
 			let tri : &mut Triangle = &mut r.tris[0];
 
@@ -51,8 +47,9 @@ fn main() -> Result<(), ()> {
 
 			t = Instant::now().duration_since(start_time).as_secs_f32();
 		})),
-	)
-	.expect("ok guys");
+	);
+
+	WindowRenderTarget::new(&mut renderer).expect("bruhhh");
 
 	Ok(())
 }
