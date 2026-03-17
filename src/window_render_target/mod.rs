@@ -38,7 +38,7 @@ impl WindowState {
 pub struct WindowRenderTarget<'a> {
 	source : &'a mut Renderer,
 	//Internal windowing systems need to be inited by winit's application handler callback, so it
-	//must be made an option
+	//must be behind an option
 	window_state : Option<WindowState>,
 }
 
