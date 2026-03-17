@@ -1,7 +1,10 @@
 // Module that handles the main loop of
 // drawing and rendering.
 
-use glam::{UVec2, Vec3};
+mod camera;
+
+use camera::Camera;
+use glam::{Mat4, UVec2, Vec3, Vec4, Vec4Swizzles};
 
 use crate::pixel::Pixel;
 use crate::triangle::Triangle;
@@ -9,8 +12,10 @@ use crate::triangle::Triangle;
 pub struct Renderer {
 	// Main frame buffer that is written to
 	pub framebuffer : Vec<Pixel>,
-	//Settings for how to draw things
+	// Settings for how to draw things
 	pub renderer_settings : RendererSettings,
+	// Camera that holds the camera and projection matrix
+	pub camera : Camera,
 	// Triangles to be rastered
 	pub tris : Vec<Triangle>,
 	// Update function to run before drawing each frame
@@ -30,6 +35,7 @@ impl Renderer {
 					as usize
 			],
 			renderer_settings,
+			camera : Camera::default(),
 			tris,
 			update_fn,
 		}
@@ -117,7 +123,11 @@ impl Renderer {
 			let i : usize = i;
 
 			let initial_y : u32 = bounds[i];
-			let final_y : u32 = bounds[i + 1];
+			let final_y : u32 = if top_y != mid_y {
+				bounds[i + 1]
+			} else {
+				bot_y
+			};
 
 			if initial_y == final_y {
 				break;
@@ -142,12 +152,14 @@ impl Renderer {
 				}
 
 				let lef_x : usize = usize::min(
-					(self.ndx_to_screen_x(x1) + (y * self.width())) as usize,
+					(y * self.width() + u32::min(self.ndx_to_screen_x(x1), self.width()))
+						as usize,
 					self.framebuffer.len() - 1,
 				);
 
 				let rig_x : usize = usize::min(
-					(self.ndx_to_screen_x(x2) + (y * self.width())) as usize,
+					(y * self.width() + u32::min(self.ndx_to_screen_x(x2), self.width()))
+						as usize,
 					self.framebuffer.len() - 1,
 				);
 
@@ -168,8 +180,14 @@ impl Renderer {
 	fn raster(self: &mut Renderer) -> () {
 		self.framebuffer.fill(self.renderer_settings.background_col);
 
+		let cam_proj_mat : Mat4 = self.camera.proj_mat * self.camera.camera_mat;
+
 		self.tris.clone().iter().for_each(|t : &Triangle| -> () {
-			self.raster_tri(t);
+			self.raster_tri(&Triangle::new(
+				(cam_proj_mat * Vec4::from((t.points[0], 1_f32))).xyz(),
+				(cam_proj_mat * Vec4::from((t.points[1], 1_f32))).xyz(),
+				(cam_proj_mat * Vec4::from((t.points[2], 1_f32))).xyz(),
+			));
 		});
 	}
 
@@ -182,7 +200,7 @@ impl Renderer {
 			self.update_fn.take();
 
 		if let Some(f) = &mut temp {
-			let mut f : &mut Box<dyn FnMut(&mut Renderer) -> ()> = f;
+			let f : &mut Box<dyn FnMut(&mut Renderer) -> ()> = f;
 			(f)(self);
 		}
 
