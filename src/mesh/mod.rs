@@ -4,7 +4,7 @@
 // away and f32::MAX being ontop of
 // everything
 
-use glam::{Mat2, Mat4, Vec2, Vec3, Vec3Swizzles};
+use glam::{Mat4, Vec3};
 #[derive(Clone, Debug)]
 pub struct Mesh {
 	//Mesh data that's drawn, TODO: add enum that allows giving mesh simple list of points instead

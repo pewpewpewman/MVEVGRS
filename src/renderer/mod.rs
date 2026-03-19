@@ -6,7 +6,7 @@ mod camera;
 use std::ops::Not;
 
 use camera::Camera;
-use glam::{Mat4, UVec2, Vec3, Vec3Swizzles, Vec4};
+use glam::{Mat4, UVec2, Vec3, Vec3Swizzles};
 
 use crate::mesh::{Mesh, Triangle};
 use crate::pixel::Pixel;
@@ -195,18 +195,17 @@ impl Renderer {
 					//Horizontal interp
 					let t : f32 = (x - lef_x) as f32 / (rig_x - lef_x) as f32;
 
-					let z : f32 = 1.0
-						/ <f32 as glam::FloatExt>::lerp((1.0 / lef_z), (1.0 / rig_z), t);
+					let z : f32 = 1.0 / ((1.0 / lef_z) * (1.0 - t) + (1.0 / rig_z) * t);
 
 					let pixel_fb_idx : usize = usize::min(
 						(y * self.width() + u32::min(x, self.width())) as usize,
 						self.frame_buffer.len() - 1,
 					);
 
-					if z <= self.depth_buffer[pixel_fb_idx] {
+					if z < self.depth_buffer[pixel_fb_idx] {
 						self.frame_buffer[pixel_fb_idx] =
 							if !self.renderer_settings.show_tri_div {
-								Pixel::new(z, 0.0, 0.0, 1.0)
+								Pixel::new(0.25, 0.0, 0.75, 1.0)
 							} else {
 								if i == 0 {
 									Pixel::new(0.0, 0.0, 1.0, 1.0)
@@ -223,6 +222,18 @@ impl Renderer {
 	}
 
 	pub fn frame_step(self: &mut Renderer) -> () {
+		//Calling a function that acts on its own struct causes some borrow checker problems, let's
+		//do some shenanigans to please it
+		let mut temp : Option<Box<dyn FnMut(&mut Renderer) -> ()>> =
+			self.update_fn.take();
+
+		if let Some(f) = &mut temp {
+			let f : &mut Box<dyn FnMut(&mut Renderer) -> ()> = f;
+			(f)(self);
+		}
+
+		self.update_fn = temp;
+
 		// Raster all triangles
 		self
 			.frame_buffer
@@ -243,18 +254,6 @@ impl Renderer {
 				));
 			});
 		});
-
-		//Calling a function that acts on its own struct causes some borrow checker problems, let's
-		//do some shenanigans to please it
-		let mut temp : Option<Box<dyn FnMut(&mut Renderer) -> ()>> =
-			self.update_fn.take();
-
-		if let Some(f) = &mut temp {
-			let f : &mut Box<dyn FnMut(&mut Renderer) -> ()> = f;
-			(f)(self);
-		}
-
-		self.update_fn = temp;
 	}
 }
 
@@ -275,8 +274,8 @@ impl Default for RendererSettings {
 		RendererSettings {
 			width : 720,
 			height : 480,
-			background_col : Pixel::new(1.0, 0.5, 0.75, 1.0),
-			show_tri_div : true,
+			background_col : Pixel::new(0.5, 0.75, 0.9, 0.5),
+			show_tri_div : false,
 		}
 	}
 }
