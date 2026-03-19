@@ -3,21 +3,25 @@
 
 mod camera;
 
-use camera::Camera;
-use glam::{Mat4, UVec2, Vec3, Vec4, Vec4Swizzles};
+use std::ops::Not;
 
+use camera::Camera;
+use glam::{Mat4, UVec2, Vec3, Vec3Swizzles, Vec4};
+
+use crate::mesh::{Mesh, Triangle};
 use crate::pixel::Pixel;
-use crate::triangle::Triangle;
 
 pub struct Renderer {
 	// Main frame buffer that is written to
-	pub framebuffer : Vec<Pixel>,
+	pub frame_buffer : Vec<Pixel>,
+	// Depth buffer that is used for knowing what tris are visible
+	pub depth_buffer : Vec<f32>,
 	// Settings for how to draw things
 	pub renderer_settings : RendererSettings,
 	// Camera that holds the camera and projection matrix
 	pub camera : Camera,
 	// Triangles to be rastered
-	pub tris : Vec<Triangle>,
+	pub meshes : Vec<Mesh>,
 	// Update function to run before drawing each frame
 	update_fn : Option<Box<dyn FnMut(&mut Renderer) -> ()>>,
 }
@@ -25,18 +29,18 @@ pub struct Renderer {
 impl Renderer {
 	pub fn new(
 		renderer_settings : RendererSettings,
-		tris : Vec<Triangle>,
+		meshes : Vec<Mesh>,
 		update_fn : Option<Box<dyn FnMut(&mut Renderer) -> ()>>,
 	) -> Renderer {
+		let pix_area : usize =
+			(renderer_settings.width * renderer_settings.height) as usize;
+
 		Renderer {
-			framebuffer : vec![
-				renderer_settings.background_col;
-				(renderer_settings.width * renderer_settings.height)
-					as usize
-			],
+			frame_buffer : vec![renderer_settings.background_col; pix_area],
+			depth_buffer : vec![f32::MAX; pix_area],
 			renderer_settings,
 			camera : Camera::default(),
-			tris,
+			meshes,
 			update_fn,
 		}
 	}
@@ -90,45 +94,66 @@ impl Renderer {
 		UVec2::new(self.ndx_to_screen_x(p.x), self.ndy_to_screen_y(p.y))
 	}
 
+	//Test to see if a given point is on screen
+	fn point_in_ndc(p : &Vec3) -> bool {
+		p.xy()
+			.to_array()
+			.iter()
+			.any(|f : &f32| -> bool { *f < -1_f32 || *f > 1_f32 })
+			.not()
+	}
+
+	fn tri_in_ndc(t : &Triangle) -> bool {
+		t.0.iter().any(Renderer::point_in_ndc)
+	}
+
 	// Draw a single triangle to the
-	// framebuffer
+	// frame_buffer
 	fn raster_tri(
 		self: &mut Renderer,
 		tri : &Triangle,
 	) -> () {
-		let mut x_sorted : [&Vec3; 3] = tri.points.each_ref();
+		if !Renderer::tri_in_ndc(tri) {
+			return;
+		}
+
+		let mut x_sorted : [&Vec3; 3] = tri.0.each_ref();
 
 		x_sorted.sort_by(|a : &&Vec3, b : &&Vec3| -> std::cmp::Ordering {
 			a.x.total_cmp(&b.x)
 		});
 
-		let mut y_sorted : [&Vec3; 3] = tri.points.each_ref();
+		let mut y_sorted : [&Vec3; 3] = tri.0.each_ref();
 
 		y_sorted.sort_by(|a : &&Vec3, b : &&Vec3| -> std::cmp::Ordering {
 			b.y.total_cmp(&a.y)
 		});
 
 		// Screen coordinate of scanline bounds
-		let top_y : u32 = self.ndy_to_screen_y(y_sorted[0].y);
+		let top_y : u32 =
+			u32::clamp(self.ndy_to_screen_y(y_sorted[0].y), 0, self.height());
 
-		let bot_y : u32 = self.ndy_to_screen_y(y_sorted[2].y);
+		let bot_y : u32 =
+			u32::clamp(self.ndy_to_screen_y(y_sorted[2].y), 0, self.height());
 
-		let mid_y : u32 = self.ndy_to_screen_y(y_sorted[1].y);
+		let mid_y : u32 =
+			u32::clamp(self.ndy_to_screen_y(y_sorted[1].y), 0, self.height());
 
 		// slice of bounds so the two iterations
 		// can be under one loop
 		let bounds : [u32; 3] = [top_y, mid_y, bot_y];
 
-		for i in 0..=1 {
-			let i : usize = i;
-
+		for i in 0..=1_usize {
 			let initial_y : u32 = bounds[i];
+
 			let final_y : u32 = if top_y != mid_y {
 				bounds[i + 1]
 			} else {
 				bot_y
 			};
 
+			//Prevents near invisible triangles that are drawn as long lines accross the entire
+			//screen
 			if initial_y == final_y {
 				break;
 			}
@@ -139,60 +164,85 @@ impl Renderer {
 
 				// We can easily find the y coordinate
 				// from the side formed by 2 lines
-				let mut x1 : f32 =
+				let mut lef_x : f32 =
 					<f32 as glam::FloatExt>::lerp(y_sorted[i].x, y_sorted[i + 1].x, t);
+
+				let mut lef_z : f32 =
+					<f32 as glam::FloatExt>::lerp(y_sorted[i].z, y_sorted[i + 1].z, t);
 
 				let t : f32 = (y - top_y) as f32 / (bot_y - top_y) as f32;
 
-				let mut x2 : f32 =
+				let mut rig_x : f32 =
 					<f32 as glam::FloatExt>::lerp(y_sorted[0].x, y_sorted[2].x, t);
 
-				if x1 > x2 {
-					std::mem::swap(&mut x1, &mut x2);
+				let mut rig_z : f32 =
+					<f32 as glam::FloatExt>::lerp(y_sorted[0].z, y_sorted[2].z, t);
+
+				if lef_x > rig_x {
+					std::mem::swap(&mut lef_x, &mut rig_x);
+					std::mem::swap(&mut lef_z, &mut rig_z);
 				}
 
-				let lef_x : usize = usize::min(
-					(y * self.width() + u32::min(self.ndx_to_screen_x(x1), self.width()))
-						as usize,
-					self.framebuffer.len() - 1,
-				);
+				let lef_x : u32 =
+					u32::clamp(self.ndx_to_screen_x(lef_x), 0, self.width());
 
-				let rig_x : usize = usize::min(
-					(y * self.width() + u32::min(self.ndx_to_screen_x(x2), self.width()))
-						as usize,
-					self.framebuffer.len() - 1,
-				);
+				let rig_x : u32 =
+					u32::clamp(self.ndx_to_screen_x(rig_x), 0, self.width());
 
-				if !self.renderer_settings.show_tri_div {
-					self.framebuffer[lef_x..=rig_x].fill(Pixel::new(0.0, 0.0, 1.0, 1.0));
-				} else {
-					self.framebuffer[lef_x..=rig_x].fill(if i == 0 {
-						Pixel::new(0.0, 0.0, 1.0, 1.0)
-					} else {
-						Pixel::new(0.0, 1.0, 0.0, 1.0)
-					});
+				for x in lef_x..=rig_x {
+					//PER PIXEL OPERATIONS HERE! :D
+
+					//Horizontal interp
+					let t : f32 = (x - lef_x) as f32 / (rig_x - lef_x) as f32;
+
+					let z : f32 = 1.0
+						/ <f32 as glam::FloatExt>::lerp((1.0 / lef_z), (1.0 / rig_z), t);
+
+					let pixel_fb_idx : usize = usize::min(
+						(y * self.width() + u32::min(x, self.width())) as usize,
+						self.frame_buffer.len() - 1,
+					);
+
+					if z <= self.depth_buffer[pixel_fb_idx] {
+						self.frame_buffer[pixel_fb_idx] =
+							if !self.renderer_settings.show_tri_div {
+								Pixel::new(z, 0.0, 0.0, 1.0)
+							} else {
+								if i == 0 {
+									Pixel::new(0.0, 0.0, 1.0, 1.0)
+								} else {
+									Pixel::new(0.0, 1.0, 0.0, 1.0)
+								}
+							};
+
+						self.depth_buffer[pixel_fb_idx] = z;
+					}
 				}
 			}
 		}
 	}
 
-	// Raster all triangles
-	fn raster(self: &mut Renderer) -> () {
-		self.framebuffer.fill(self.renderer_settings.background_col);
-
-		let cam_proj_mat : Mat4 = self.camera.proj_mat * self.camera.camera_mat;
-
-		self.tris.clone().iter().for_each(|t : &Triangle| -> () {
-			self.raster_tri(&Triangle::new(
-				(cam_proj_mat * Vec4::from((t.points[0], 1_f32))).xyz(),
-				(cam_proj_mat * Vec4::from((t.points[1], 1_f32))).xyz(),
-				(cam_proj_mat * Vec4::from((t.points[2], 1_f32))).xyz(),
-			));
-		});
-	}
-
 	pub fn frame_step(self: &mut Renderer) -> () {
-		self.raster();
+		// Raster all triangles
+		self
+			.frame_buffer
+			.fill(self.renderer_settings.background_col);
+
+		self.depth_buffer.fill(f32::MAX);
+
+		let proj_cam_mat : Mat4 = self.camera.proj_mat * self.camera.camera_mat;
+
+		self.meshes.clone().into_iter().for_each(|m : Mesh| -> () {
+			let proj_cam_model_mat : Mat4 = proj_cam_mat * m.model_mat;
+
+			m.tris.iter().for_each(|t : &Triangle| -> () {
+				self.raster_tri(&Triangle::new(
+					proj_cam_model_mat.project_point3(t.0[0]),
+					proj_cam_model_mat.project_point3(t.0[1]),
+					proj_cam_model_mat.project_point3(t.0[2]),
+				));
+			});
+		});
 
 		//Calling a function that acts on its own struct causes some borrow checker problems, let's
 		//do some shenanigans to please it
@@ -223,10 +273,10 @@ pub struct RendererSettings {
 impl Default for RendererSettings {
 	fn default() -> RendererSettings {
 		RendererSettings {
-			width : 500,
-			height : 500,
+			width : 720,
+			height : 480,
 			background_col : Pixel::new(1.0, 0.5, 0.75, 1.0),
-			show_tri_div : false,
+			show_tri_div : true,
 		}
 	}
 }

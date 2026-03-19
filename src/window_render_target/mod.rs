@@ -1,6 +1,8 @@
+use std::collections::HashSet;
 use std::num::NonZeroU32;
 use std::rc::Rc;
 
+use glam::{Mat4, Vec3};
 use softbuffer::{Buffer, Context, Surface};
 use winit::application::ApplicationHandler;
 use winit::dpi::{PhysicalSize, Size};
@@ -40,6 +42,8 @@ pub struct WindowRenderTarget<'a> {
 	//Internal windowing systems need to be inited by winit's application handler callback, so it
 	//must be behind an option
 	window_state : Option<WindowState>,
+	//Since the winit window events dont fire every frame a key is held, we use this instead
+	keyboard_state : HashSet<KeyCode>,
 }
 
 impl<'a> WindowRenderTarget<'a> {
@@ -53,6 +57,7 @@ impl<'a> WindowRenderTarget<'a> {
 		let mut ret : WindowRenderTarget = WindowRenderTarget {
 			source,
 			window_state : None,
+			keyboard_state : HashSet::new(),
 		};
 
 		event_loop
@@ -97,8 +102,7 @@ impl<'a> ApplicationHandler for WindowRenderTarget<'a> {
 							Icon::from_rgba(rgba, width, height)
 								.expect("Icon should be creatable!")
 						}))
-						.with_transparent(true)
-						.with_visible(false),
+						.with_transparent(true),
 				)
 				.expect("Window creation should be unfailable!"),
 		);
@@ -124,6 +128,52 @@ impl<'a> ApplicationHandler for WindowRenderTarget<'a> {
 	) -> () {
 		match event {
 			WindowEvent::RedrawRequested => {
+				//Respond to user input
+				let mut camera_pos_change : Vec3 = Vec3::ZERO;
+				let mut camera_horiz_angle_change : f32 = 0_f32;
+				let mut camera_vert_angle_change : f32 = 0_f32;
+
+				self.keyboard_state.iter().for_each(|kc : &KeyCode| -> () {
+					match kc {
+						KeyCode::KeyW => {
+							camera_pos_change.z -= 0.01;
+						},
+						KeyCode::KeyA => {
+							camera_pos_change.x += 0.01;
+						},
+						KeyCode::KeyS => {
+							camera_pos_change.z += 0.01;
+						},
+						KeyCode::KeyD => {
+							camera_pos_change.x -= 0.01;
+						},
+
+						KeyCode::Space => {
+							camera_pos_change.y -= 0.01;
+						},
+
+						KeyCode::ShiftLeft => {
+							camera_pos_change.y += 0.01;
+						},
+
+						KeyCode::ArrowLeft => camera_horiz_angle_change -= 0.01,
+
+						KeyCode::ArrowRight => camera_horiz_angle_change += 0.01,
+
+						KeyCode::ArrowUp => camera_vert_angle_change += 0.01,
+
+						KeyCode::ArrowDown => camera_vert_angle_change -= 0.01,
+
+						_ => {},
+					}
+				});
+
+				self.source.camera.camera_mat *=
+					Mat4::from_translation(camera_pos_change);
+
+				// * Mat4::from_rotation_y(camera_horiz_angle_change)
+				//* Mat4::from_rotation_x(camera_vert_angle_change)
+
 				//Advanced render update function and have it draw to its internal frame buffer
 				self.source.frame_step();
 
@@ -141,12 +191,6 @@ impl<'a> ApplicationHandler for WindowRenderTarget<'a> {
 					)
 					.expect("Surface should be resizable");
 
-				/*
-				self
-					.
-					.framebuffer
-					.resize((self.source.width() * self.source.height()) as usize, self.source.render_settings.background_col);  */
-
 				let mut buffer : Buffer<OwnedDisplayHandle, Rc<Window>> = self
 					.window_state
 					.as_mut()
@@ -155,17 +199,9 @@ impl<'a> ApplicationHandler for WindowRenderTarget<'a> {
 					.buffer_mut()
 					.expect("Buffer should be accessible");
 
-				/*
-				assert_eq!(
-					buffer.len(),
-					self.source.framebuffer.len(),
-					"Softbuffer buffer and renderer's framebuffer must be the same size!",
-				);
-				*/
-
 				buffer
 					.iter_mut()
-					.zip(self.source.framebuffer.iter())
+					.zip(self.source.frame_buffer.iter())
 					.for_each(|(u, p) : (&mut u32, &Pixel)| -> () {
 						*u = ((p.x * u8::MAX as f32).round() as u32) << 16
 							| ((p.y * u8::MAX as f32).round() as u32) << 8
@@ -188,24 +224,47 @@ impl<'a> ApplicationHandler for WindowRenderTarget<'a> {
 			} => {
 				let event : KeyEvent = event;
 
-				if event.physical_key == PhysicalKey::Code(KeyCode::F11)
-					&& !event.repeat
-					&& event.state == ElementState::Pressed
-				{
-					self.window_state.as_ref().unwrap().window.set_fullscreen(
-						self
-							.window_state
-							.as_ref()
-							.unwrap()
-							.window
-							.fullscreen()
-							.map_or_else(
-								|| -> Option<Fullscreen> { Some(Fullscreen::Borderless(None)) },
-								|_ : Fullscreen| -> Option<Fullscreen> { None },
-							),
-					);
+				match event {
+					KeyEvent {
+						physical_key: PhysicalKey::Code(KeyCode::F11),
+						repeat: false,
+						state: ElementState::Pressed,
+						..
+					} => {
+						self.window_state.as_ref().unwrap().window.set_fullscreen(
+							self
+								.window_state
+								.as_ref()
+								.unwrap()
+								.window
+								.fullscreen()
+								.map_or_else(
+									|| -> Option<Fullscreen> {
+										Some(Fullscreen::Borderless(None))
+									},
+									|_ : Fullscreen| -> Option<Fullscreen> { None },
+								),
+						);
 
-					self.window_state.as_ref().unwrap().window.fullscreen();
+						self.window_state.as_ref().unwrap().window.fullscreen();
+					},
+					KeyEvent {
+						physical_key: PhysicalKey::Code(kc),
+						state: ElementState::Pressed,
+						repeat: false,
+						..
+					} => {
+						self.keyboard_state.insert(kc);
+					},
+					KeyEvent {
+						physical_key: PhysicalKey::Code(kc),
+						state: ElementState::Released,
+						..
+					} => {
+						self.keyboard_state.remove(&kc);
+					},
+
+					_ => {},
 				}
 			},
 
