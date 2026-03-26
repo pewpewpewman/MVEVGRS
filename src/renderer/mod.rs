@@ -6,7 +6,7 @@ mod camera;
 use std::ops::Not;
 
 use camera::Camera;
-use glam::{Mat4, UVec2, Vec3, Vec3Swizzles};
+use glam::{IVec2, Mat4, Vec2, Vec3, Vec3Swizzles, Vec4, Vec4Swizzles};
 
 use crate::mesh::{Mesh, Triangle};
 use crate::pixel::Pixel;
@@ -54,21 +54,21 @@ impl Renderer {
 	// versa
 	pub fn screen_x_to_ndx(
 		self: &Renderer,
-		x : u32,
+		x : i32,
 	) -> f32 {
 		x as f32 / self.width() as f32 * 2_f32 - 1_f32
 	}
 
 	pub fn screen_y_to_ndy(
 		self: &Renderer,
-		y : u32,
+		y : i32,
 	) -> f32 {
 		(1_f32 - (y as f32 / self.height() as f32)) * 2_f32 - 1_f32
 	}
 
 	pub fn screen_coords_to_ndc(
 		self: &Renderer,
-		c : UVec2,
+		c : IVec2,
 	) -> Vec3 {
 		Vec3::new(self.screen_x_to_ndx(c.x), self.screen_y_to_ndy(c.y), 0_f32)
 	}
@@ -76,22 +76,22 @@ impl Renderer {
 	pub fn ndx_to_screen_x(
 		self: &Renderer,
 		x : f32,
-	) -> u32 {
-		f32::round(self.width() as f32 * ((1_f32 + x) / 2_f32)) as u32
+	) -> i32 {
+		f32::round(self.width() as f32 * ((1_f32 + x) / 2_f32)) as i32
 	}
 
 	pub fn ndy_to_screen_y(
 		self: &Renderer,
 		y : f32,
-	) -> u32 {
-		f32::round(self.height() as f32 * (1_f32 - ((1_f32 + y) / 2_f32))) as u32
+	) -> i32 {
+		f32::round(self.height() as f32 * (1_f32 - ((1_f32 + y) / 2_f32))) as i32
 	}
 
 	pub fn ndc_to_screen_coords(
 		self: &Renderer,
 		p : &Vec3,
-	) -> UVec2 {
-		UVec2::new(self.ndx_to_screen_x(p.x), self.ndy_to_screen_y(p.y))
+	) -> IVec2 {
+		IVec2::new(self.ndx_to_screen_x(p.x), self.ndy_to_screen_y(p.y))
 	}
 
 	//Test to see if a given point is on screen
@@ -103,9 +103,8 @@ impl Renderer {
 			.not()
 	}
 
-	fn tri_in_ndc(t : &Triangle) -> bool {
-		t.0.iter().any(Renderer::point_in_ndc)
-	}
+	//A triangle is on screen if any of its points are in NDC range and
+	fn is_tri_visible(t : &Triangle) -> bool { !false }
 
 	// Draw a single triangle to the
 	// frame_buffer
@@ -113,7 +112,9 @@ impl Renderer {
 		self: &mut Renderer,
 		tri : &Triangle,
 	) -> () {
-		if !Renderer::tri_in_ndc(tri) {
+		//TODO: make this not clip triangles that are in view but have all 3 points out of NDC
+		if !Renderer::is_tri_visible(tri) {
+			println!("TRI CULLED!");
 			return;
 		}
 
@@ -130,23 +131,20 @@ impl Renderer {
 		});
 
 		// Screen coordinate of scanline bounds
-		let top_y : u32 =
-			u32::clamp(self.ndy_to_screen_y(y_sorted[0].y), 0, self.height());
+		let top_y : i32 = self.ndy_to_screen_y(y_sorted[0].y);
 
-		let bot_y : u32 =
-			u32::clamp(self.ndy_to_screen_y(y_sorted[2].y), 0, self.height());
+		let mid_y : i32 = self.ndy_to_screen_y(y_sorted[1].y);
 
-		let mid_y : u32 =
-			u32::clamp(self.ndy_to_screen_y(y_sorted[1].y), 0, self.height());
+		let bot_y : i32 = self.ndy_to_screen_y(y_sorted[2].y);
 
 		// slice of bounds so the two iterations
 		// can be under one loop
-		let bounds : [u32; 3] = [top_y, mid_y, bot_y];
+		let bounds : [i32; 3] = [top_y, mid_y, bot_y];
 
 		for i in 0..=1_usize {
-			let initial_y : u32 = bounds[i];
+			let initial_y : i32 = bounds[i];
 
-			let final_y : u32 = if top_y != mid_y {
+			let final_y : i32 = if top_y != mid_y {
 				bounds[i + 1]
 			} else {
 				bot_y
@@ -158,8 +156,10 @@ impl Renderer {
 				break;
 			}
 
-			// Iterate over lines of triangle
-			for y in initial_y..=final_y {
+			// Iterate over lines of triangle - clamped to height for the **PERF**
+			for y in initial_y.clamp(0, self.height() as i32 - 1)
+				..=final_y.clamp(0, self.height() as i32 - 1)
+			{
 				let t : f32 = (y - initial_y) as f32 / (final_y - initial_y) as f32;
 
 				// We can easily find the y coordinate
@@ -183,34 +183,39 @@ impl Renderer {
 					std::mem::swap(&mut lef_z, &mut rig_z);
 				}
 
-				let lef_x : u32 =
-					u32::clamp(self.ndx_to_screen_x(lef_x), 0, self.width());
+				let lef_x : i32 = self.ndx_to_screen_x(lef_x);
 
-				let rig_x : u32 =
-					u32::clamp(self.ndx_to_screen_x(rig_x), 0, self.width());
+				let rig_x : i32 = self.ndx_to_screen_x(rig_x);
 
-				for x in lef_x..=rig_x {
+				//Iterate over each horizontal pixel - also clamped for perf and to prevent drawing
+				//in the next scan line
+				for x in lef_x.clamp(0, self.width() as i32 - 1)
+					..=rig_x.clamp(0, self.width() as i32 - 1)
+				{
 					//PER PIXEL OPERATIONS HERE! :D
 
 					//Horizontal interp
-					let t : f32 = (x - lef_x) as f32 / (rig_x - lef_x) as f32;
+					let t : f32 =
+						((x as i32) - (lef_x as i32)) as f32 / (rig_x - lef_x) as f32;
 
 					let z : f32 = 1.0 / ((1.0 / lef_z) * (1.0 - t) + (1.0 / rig_z) * t);
 
 					let pixel_fb_idx : usize = usize::min(
-						(y * self.width() + u32::min(x, self.width())) as usize,
+						(y * self.width() as i32 + x) as usize,
 						self.frame_buffer.len() - 1,
 					);
 
-					if z < self.depth_buffer[pixel_fb_idx] {
+					let fill : Pixel = Pixel::new(0.25, 0.0, 0.75, 1.0);
+
+					if z < self.depth_buffer[pixel_fb_idx] && z > self.camera.near_plane {
 						self.frame_buffer[pixel_fb_idx] =
 							if !self.renderer_settings.show_tri_div {
-								Pixel::new(0.25, 0.0, 0.75, 1.0)
+								fill
 							} else {
 								if i == 0 {
-									Pixel::new(0.0, 0.0, 1.0, 1.0)
+									fill
 								} else {
-									Pixel::new(0.0, 1.0, 0.0, 1.0)
+									Pixel::ONE - fill
 								}
 							};
 
@@ -248,9 +253,9 @@ impl Renderer {
 
 			m.tris.iter().for_each(|t : &Triangle| -> () {
 				self.raster_tri(&Triangle::new(
-					proj_cam_model_mat.project_point3(t.0[0]),
-					proj_cam_model_mat.project_point3(t.0[1]),
-					proj_cam_model_mat.project_point3(t.0[2]),
+					proj_cam_model_mat.project_point3(Triangle::default().0[0]),
+					proj_cam_model_mat.project_point3(Triangle::default().0[1]),
+					proj_cam_model_mat.project_point3(Triangle::default().0[2]),
 				));
 			});
 		});
@@ -272,10 +277,10 @@ pub struct RendererSettings {
 impl Default for RendererSettings {
 	fn default() -> RendererSettings {
 		RendererSettings {
-			width : 720,
-			height : 480,
+			width : 1920 / 2,
+			height : 1080 / 2,
 			background_col : Pixel::new(0.5, 0.75, 0.9, 0.5),
-			show_tri_div : false,
+			show_tri_div : true,
 		}
 	}
 }

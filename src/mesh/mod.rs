@@ -37,6 +37,7 @@ impl Mesh {
 					Vec3::new(-0.5, -0.5, -0.5),
 					Vec3::new(0.5, 0.5, 0.5),
 				),
+				/*
 				//Lower Right
 				Triangle::new(
 					Vec3::new(0.5, -0.5, -0.5),
@@ -107,7 +108,7 @@ impl Mesh {
 					Vec3::new(-0.5, 0.5, 0.5),
 					Vec3::new(-0.5, -0.5, 0.5),
 					Vec3::new(-0.5, -0.5, -0.5),
-				),
+				), */
 			],
 			Mat4::IDENTITY,
 		)
@@ -127,26 +128,15 @@ impl Triangle {
 	}
 }
 
-impl Triangle {
-	//Area formula from https://math.stackexchange.com/questions/128991/how-to-calculate-the-area-of-a-3d-triangle
-	pub fn area(self: &Triangle) -> f32 {
-		let a : Vec3 = self.0[0];
-		let b : Vec3 = self.0[1];
-		let c : Vec3 = self.0[2];
-
-		0.5 * (a - b).cross(a - c).length()
-	}
-}
-
 // Creates an equilateral triangle
 // centered on the origin with side
 // lengths of 1
 impl Default for Triangle {
 	fn default() -> Triangle {
 		Triangle::new(
-			Vec3::new(0_f32, 0.433012701892, 1.0_f32),
-			Vec3::new(-0.5_f32, -0.433012701892, 1.0_f32),
-			Vec3::new(0.5_f32, -0.433012701892, 1.0_f32),
+			Vec3::new(0_f32, 0.433012701892, 0.0_f32),
+			Vec3::new(-0.5_f32, -0.433012701892, 0.0_f32),
+			Vec3::new(0.5_f32, -0.433012701892, 0.0_f32),
 		)
 	}
 }

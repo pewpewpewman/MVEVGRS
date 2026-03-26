@@ -133,36 +133,38 @@ impl<'a> ApplicationHandler for WindowRenderTarget<'a> {
 				let mut camera_horiz_angle_change : f32 = 0_f32;
 				let mut camera_vert_angle_change : f32 = 0_f32;
 
+				let movement_amount : f32 = 0.01;
+
 				self.keyboard_state.iter().for_each(|kc : &KeyCode| -> () {
 					match kc {
 						KeyCode::KeyW => {
-							camera_pos_change.z -= 0.01;
+							camera_pos_change.z -= movement_amount;
 						},
 						KeyCode::KeyA => {
-							camera_pos_change.x += 0.01;
+							camera_pos_change.x += movement_amount;
 						},
 						KeyCode::KeyS => {
-							camera_pos_change.z += 0.01;
+							camera_pos_change.z += movement_amount;
 						},
 						KeyCode::KeyD => {
-							camera_pos_change.x -= 0.01;
+							camera_pos_change.x -= movement_amount;
 						},
 
 						KeyCode::Space => {
-							camera_pos_change.y -= 0.01;
+							camera_pos_change.y -= movement_amount;
 						},
 
 						KeyCode::ShiftLeft => {
-							camera_pos_change.y += 0.01;
+							camera_pos_change.y += movement_amount;
 						},
 
-						KeyCode::ArrowLeft => camera_horiz_angle_change -= 0.01,
+						KeyCode::ArrowLeft => camera_horiz_angle_change -= movement_amount,
 
-						KeyCode::ArrowRight => camera_horiz_angle_change += 0.01,
+						KeyCode::ArrowRight => camera_horiz_angle_change += movement_amount,
 
-						KeyCode::ArrowUp => camera_vert_angle_change += 0.01,
+						KeyCode::ArrowUp => camera_vert_angle_change += movement_amount,
 
-						KeyCode::ArrowDown => camera_vert_angle_change -= 0.01,
+						KeyCode::ArrowDown => camera_vert_angle_change -= movement_amount,
 
 						_ => {},
 					}
