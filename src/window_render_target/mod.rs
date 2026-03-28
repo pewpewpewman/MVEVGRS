@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 use std::num::NonZeroU32;
+use std::ops::{Add, Mul};
 use std::rc::Rc;
 
 use glam::{Mat4, Vec3};
@@ -46,8 +47,12 @@ pub struct WindowRenderTarget<'a, V, TE, P, CE> {
 	keyboard_state : HashSet<KeyCode>,
 }
 
-impl<'a, V : Clone, TE : Clone, P : Clone, CE : Clone>
-	WindowRenderTarget<'a, V, TE, P, CE>
+impl<'a, V, TE, P, CE> WindowRenderTarget<'a, V, TE, P, CE>
+where
+	V : Clone + Copy,
+	TE : Clone,
+	P : Clone + Copy + Mul<f32, Output = P> + Add<Output = P>,
+	CE : Clone,
 {
 	pub fn new(
 		source : &'a mut Renderer<V, TE, P, CE>
@@ -70,8 +75,13 @@ impl<'a, V : Clone, TE : Clone, P : Clone, CE : Clone>
 	}
 }
 
-impl<'a, V : Clone, TE : Clone, P : Clone, CE : Clone> ApplicationHandler
+impl<'a, V, TE, P, CE> ApplicationHandler
 	for WindowRenderTarget<'a, V, TE, P, CE>
+where
+	V : Clone + Copy,
+	TE : Clone,
+	P : Clone + Copy + Mul<f32, Output = P> + Add<Output = P>,
+	CE : Clone,
 {
 	fn resumed(
 		self: &mut WindowRenderTarget<'a, V, TE, P, CE>,

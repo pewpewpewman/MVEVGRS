@@ -3,12 +3,20 @@
 
 mod camera;
 
-use std::ops::Not;
+use std::ops::{Add, Mul, Not};
 
 use camera::Camera;
 use glam::{IVec2, Mat4, Vec2, Vec3, Vec3Swizzles, Vec4, Vec4Swizzles};
 
-use crate::mesh::{Mesh, Triangle};
+use crate::mesh::{
+	ColorEnvUpdater,
+	Mesh,
+	PixelColorer,
+	Triangle,
+	VertTransOut,
+	VertexEnvUpdater,
+	VertexTransformer,
+};
 use crate::pixel::Pixel;
 
 //The main renderer. For information on what these type generics do, please refer to
@@ -28,7 +36,13 @@ pub struct Renderer<V, TE, P, CE> {
 	update_fn : Option<UpdateFunc<V, TE, P, CE>>,
 }
 
-impl<V : Clone, TE : Clone, P : Clone, CE : Clone> Renderer<V, TE, P, CE> {
+impl<V, TE, P, CE> Renderer<V, TE, P, CE>
+where
+	V : Clone + Copy,
+	TE : Clone,
+	P : Clone + Copy + Mul<f32, Output = P> + Add<Output = P>,
+	CE : Clone,
+{
 	pub fn new(
 		renderer_settings : RendererSettings,
 		meshes : Vec<Mesh<V, TE, P, CE>>,
@@ -117,34 +131,51 @@ impl<V : Clone, TE : Clone, P : Clone, CE : Clone> Renderer<V, TE, P, CE> {
 	fn raster_tri(
 		self: &mut Renderer<V, TE, P, CE>,
 		tri : &Triangle<V>,
+		vertex_transformer : VertexTransformer<V, TE, P, CE>,
+		transformer_env : &TE,
+		pixel_colorer : PixelColorer<V, TE, P, CE>,
+		color_env : &CE,
 	) -> () {
 		//TODO: make this not clip triangles that are in view but have all 3 points out of NDC
-		/*
 		if !Renderer::<V, TE, P, CE>::is_tri_visible(tri) {
 			println!("TRI CULLED!");
 			return;
 		}
 
-		//let transformed_verts : [VertexTransformerOut<P>; 3] = [
+		let trans_out : [VertTransOut<P>; 3] =
+			tri.0.map(|v : V| -> VertTransOut<P> {
+				//Apply vertex transformer
+				let mut res : VertTransOut<P> =
+					vertex_transformer(&v, transformer_env, self);
 
-		let mut x_sorted : [&V; 3] = tri.0.each_ref();
+				//Apply perspective correction to x and y only
+				res.pos = res.pos.with_xy(res.pos.xy() / res.pos.w);
 
-		x_sorted.sort_by(|a : &&Vec4, b : &&Vec4| -> std::cmp::Ordering {
-			a.x.total_cmp(&b.x)
-		});
+				res
+			});
 
-		let mut y_sorted : [&Vec4; 3] = tri.0.each_ref();
+		let mut x_sorted : [&VertTransOut<P>; 3] = trans_out.each_ref();
 
-		y_sorted.sort_by(|a : &&Vec4, b : &&Vec4| -> std::cmp::Ordering {
-			b.y.total_cmp(&a.y)
-		});
+		x_sorted.sort_by(
+			|a : &&VertTransOut<P>, b : &&VertTransOut<P>| -> std::cmp::Ordering {
+				a.pos.x.total_cmp(&b.pos.x)
+			},
+		);
+
+		let mut y_sorted : [&VertTransOut<P>; 3] = trans_out.each_ref();
+
+		y_sorted.sort_by(
+			|a : &&VertTransOut<P>, b : &&VertTransOut<P>| -> std::cmp::Ordering {
+				b.pos.y.total_cmp(&a.pos.y)
+			},
+		);
 
 		// Screen coordinate of scanline bounds
-		let top_y : i32 = self.ndy_to_screen_y(y_sorted[0].y);
+		let top_y : i32 = self.ndy_to_screen_y(y_sorted[0].pos.y);
 
-		let mid_y : i32 = self.ndy_to_screen_y(y_sorted[1].y);
+		let mid_y : i32 = self.ndy_to_screen_y(y_sorted[1].pos.y);
 
-		let bot_y : i32 = self.ndy_to_screen_y(y_sorted[2].y);
+		let bot_y : i32 = self.ndy_to_screen_y(y_sorted[2].pos.y);
 
 		// slice of bounds so the two iterations
 		// can be under one loop
@@ -173,27 +204,48 @@ impl<V : Clone, TE : Clone, P : Clone, CE : Clone> Renderer<V, TE, P, CE> {
 
 				// We can easily find the y coordinate
 				// from the side formed by 2 lines
-				let mut lef_x : f32 =
-					<f32 as glam::FloatExt>::lerp(y_sorted[i].x, y_sorted[i + 1].x, t);
+				let mut lef_x : f32 = <f32 as glam::FloatExt>::lerp(
+					y_sorted[i].pos.x,
+					y_sorted[i + 1].pos.x,
+					t,
+				);
 
-				let mut lef_z : f32 =
-					<f32 as glam::FloatExt>::lerp(y_sorted[i].z, y_sorted[i + 1].z, t);
+				let mut lef_z : f32 = <f32 as glam::FloatExt>::lerp(
+					y_sorted[i].pos.z,
+					y_sorted[i + 1].pos.z,
+					t,
+				);
+
+				//Would be nice if we could just use glam's lerp but that would require P types
+				//implementing FloatExt and that's not what thats for
+				let mut lef_p : P =
+					y_sorted[i].colorer_in * (1_f32 - t) + y_sorted[i + 1].colorer_in * t;
 
 				let t : f32 = (y - top_y) as f32 / (bot_y - top_y) as f32;
 
-				let mut rig_x : f32 =
-					<f32 as glam::FloatExt>::lerp(y_sorted[0].x, y_sorted[2].x, t);
+				let mut rig_x : f32 = <f32 as glam::FloatExt>::lerp(
+					y_sorted[0].pos.x,
+					y_sorted[2].pos.x,
+					t,
+				);
 
-				let mut rig_z : f32 =
-					<f32 as glam::FloatExt>::lerp(y_sorted[0].z, y_sorted[2].z, t);
+				let mut rig_z : f32 = <f32 as glam::FloatExt>::lerp(
+					y_sorted[0].pos.z,
+					y_sorted[2].pos.z,
+					t,
+				);
+
+				let mut rig_p : P =
+					y_sorted[0].colorer_in * (1_f32 - t) + y_sorted[2].colorer_in * t;
 
 				if lef_x > rig_x {
 					std::mem::swap(&mut lef_x, &mut rig_x);
 					std::mem::swap(&mut lef_z, &mut rig_z);
+					std::mem::swap(&mut lef_p, &mut rig_p);
 				}
 
+				//Put bounds into screen pixel coords
 				let lef_x : i32 = self.ndx_to_screen_x(lef_x);
-
 				let rig_x : i32 = self.ndx_to_screen_x(rig_x);
 
 				//Iterate over each horizontal pixel - also clamped for perf and to prevent drawing
@@ -209,12 +261,18 @@ impl<V : Clone, TE : Clone, P : Clone, CE : Clone> Renderer<V, TE, P, CE> {
 
 					let z : f32 = 1.0 / ((1.0 / lef_z) * (1.0 - t) + (1.0 / rig_z) * t);
 
+					//Formula from
+					//https://www.scratchapixel.com/lessons/3d-basic-rendering/rasterization-practical-implementation/perspective-correct-interpolation-vertex-attributes.html
+					let p : P = (lef_p * (1_f32 / lef_z) * (1_f32 - t)
+						+ rig_p * (1_f32 / rig_z) * t)
+						* z;
+
 					let pixel_fb_idx : usize = usize::min(
 						(y * self.width() as i32 + x) as usize,
 						self.frame_buffer.len() - 1,
 					);
 
-					let fill : Pixel = Pixel::new(0.25, 0.0, 0.75, 1.0);
+					let fill : Pixel = pixel_colorer(&p, &color_env, self);
 
 					if z < self.depth_buffer[pixel_fb_idx] && z > self.camera.near_plane {
 						self.frame_buffer[pixel_fb_idx] =
@@ -233,7 +291,6 @@ impl<V : Clone, TE : Clone, P : Clone, CE : Clone> Renderer<V, TE, P, CE> {
 				}
 			}
 		}
-		*/
 	}
 
 	pub fn draw(self: &mut Renderer<V, TE, P, CE>) -> () {
@@ -251,10 +308,18 @@ impl<V : Clone, TE : Clone, P : Clone, CE : Clone> Renderer<V, TE, P, CE> {
 			.clone()
 			.into_iter()
 			.for_each(|m : Mesh<V, TE, P, CE>| -> () {
-				let proj_cam_model_mat : Mat4 = proj_cam_mat * m.model_mat;
+				let trans_env : TE = (m.trans_env_updater)(&m, self);
+
+				let color_env : CE = (m.color_env_updater)(&m, self);
 
 				m.tris.iter().for_each(|t : &Triangle<V>| -> () {
-					self.raster_tri(&t);
+					self.raster_tri(
+						&t,
+						m.vertex_transformer,
+						&trans_env,
+						m.pixel_colorer,
+						&color_env,
+					);
 				});
 			});
 	}
@@ -296,7 +361,7 @@ impl Default for RendererSettings {
 			width : 1920 / 2,
 			height : 1080 / 2,
 			background_col : Pixel::new(0.5, 0.75, 0.9, 0.5),
-			show_tri_div : true,
+			show_tri_div : false,
 		}
 	}
 }

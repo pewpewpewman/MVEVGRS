@@ -1,4 +1,4 @@
-use std::ops::Mul;
+use std::ops::{Add, Mul};
 
 use glam::{Mat4, Vec3, Vec4};
 
@@ -179,7 +179,7 @@ impl Default for Triangle<BasicV> {
 
 //Vertex Transform and Pixel Colorer Function Types
 pub type VertexTransformer<V, TE, P, CE> =
-	fn(&V, &TE, &Renderer<V, TE, P, CE>) -> VertexTransformerOut<P>;
+	fn(&V, &TE, &Renderer<V, TE, P, CE>) -> VertTransOut<P>;
 
 pub type PixelColorer<V, TE, P, CE> =
 	fn(&P, &CE, &Renderer<V, TE, P, CE>) -> Pixel;
@@ -193,14 +193,14 @@ pub type ColorEnvUpdater<V, TE, P, CE> =
 
 //The output of the vertex transformer. The generic
 //type "C" is passed to the pixel coloring function
-pub struct VertexTransformerOut<P> {
+pub struct VertTransOut<P> {
 	//This position field is the vertex's position in normalized device coordinates.
 	//PLEASE NOTE!!! THIS VALUE SHOULD **NOT** BE DIVIDED BY W AFTER BEING MULTIPLIED
 	//BY THE PROJECTION MATRIX. GLAM HAS A Mat4::project_point3 function. DO **NOT**
 	//USE IT, IT DIVIDES XYZ BY W!!
-	position : Vec4,
+	pub pos : Vec4,
 	//Data to be interpolated and passed to the coloring function
-	colorer_in : P,
+	pub colorer_in : P,
 }
 
 //A basic basic of the types put into Mesh's generics
@@ -215,9 +215,36 @@ pub struct BasicTE {
 	pub pcm_mat : Mat4,
 }
 
+//TODO: Look into derive ops crate
 #[derive(Clone, Copy)]
 pub struct BasicP {
 	pub color : Vec3,
+}
+
+impl Mul<f32> for BasicP {
+	type Output = BasicP;
+
+	fn mul(
+		self: BasicP,
+		rhs : f32,
+	) -> Self::Output {
+		BasicP {
+			color : self.color * rhs,
+		}
+	}
+}
+
+impl Add for BasicP {
+	type Output = BasicP;
+
+	fn add(
+		self: BasicP,
+		rhs : BasicP,
+	) -> Self::Output {
+		BasicP {
+			color : self.color + rhs.color,
+		}
+	}
 }
 
 #[derive(Clone, Copy)]
@@ -227,9 +254,9 @@ pub fn basic_vertex_transformer(
 	vert_data : &BasicV,
 	vert_env : &BasicTE,
 	rend : &Renderer<BasicV, BasicTE, BasicP, BasicCE>,
-) -> VertexTransformerOut<BasicP> {
-	VertexTransformerOut {
-		position : vert_env.pcm_mat * Vec4::from((vert_data.position, 1_f32)),
+) -> VertTransOut<BasicP> {
+	VertTransOut {
+		pos : vert_env.pcm_mat * Vec4::from((vert_data.position, 1_f32)),
 		colorer_in : BasicP {
 			color : vert_data.color,
 		},
