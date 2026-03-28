@@ -6,15 +6,13 @@ mod camera;
 use std::ops::{Add, Mul, Not};
 
 use camera::Camera;
-use glam::{IVec2, Mat4, Vec2, Vec3, Vec3Swizzles, Vec4, Vec4Swizzles};
+use glam::{IVec2, Mat4, Vec3, Vec3Swizzles, Vec4Swizzles};
 
 use crate::mesh::{
-	ColorEnvUpdater,
 	Mesh,
 	PixelColorer,
 	Triangle,
 	VertTransOut,
-	VertexEnvUpdater,
 	VertexTransformer,
 };
 use crate::pixel::Pixel;
@@ -124,7 +122,7 @@ where
 	}
 
 	//A triangle is on screen if any of its points are in NDC range and
-	fn is_tri_visible(t : &Triangle<V>) -> bool { !false }
+	fn is_tri_visible(_t : &Triangle<V>) -> bool { !false }
 
 	// Draw a single triangle to the
 	// frame_buffer
@@ -301,7 +299,7 @@ where
 
 		self.depth_buffer.fill(f32::MAX);
 
-		let proj_cam_mat : Mat4 = self.camera.proj_mat * self.camera.camera_mat;
+		let _proj_cam_mat : Mat4 = self.camera.proj_mat * self.camera.camera_mat;
 
 		self
 			.meshes

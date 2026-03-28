@@ -52,7 +52,7 @@ fn main() -> Result<(), ()> {
 					println!("frame rate: {}", 1_f32 / last_frame_duration.as_secs_f32());
 				}
 
-				let t : f32 = Instant::now().duration_since(start_time).as_secs_f32();
+				let _t : f32 = Instant::now().duration_since(start_time).as_secs_f32();
 				r.meshes[0].model_mat = Mat4::from_translation(Vec3::new(0.0, 0.0, 2.0))
 				//* Mat4::from_rotation_x(t)
 				//* Mat4::from_rotation_y(t)

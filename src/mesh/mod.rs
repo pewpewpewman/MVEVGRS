@@ -253,7 +253,7 @@ pub struct BasicCE {}
 pub fn basic_vertex_transformer(
 	vert_data : &BasicV,
 	vert_env : &BasicTE,
-	rend : &Renderer<BasicV, BasicTE, BasicP, BasicCE>,
+	_rend : &Renderer<BasicV, BasicTE, BasicP, BasicCE>,
 ) -> VertTransOut<BasicP> {
 	VertTransOut {
 		pos : vert_env.pcm_mat * Vec4::from((vert_data.position, 1_f32)),
@@ -265,8 +265,8 @@ pub fn basic_vertex_transformer(
 
 pub fn basic_pixel_colorer(
 	color_data : &BasicP,
-	color_env : &BasicCE,
-	rend : &Renderer<BasicV, BasicTE, BasicP, BasicCE>,
+	_color_env : &BasicCE,
+	_rend : &Renderer<BasicV, BasicTE, BasicP, BasicCE>,
 ) -> Pixel {
 	Vec4::from((color_data.color, 1.0))
 }
@@ -282,8 +282,8 @@ pub fn basic_trans_env_updater(
 }
 
 pub fn basic_color_env_updater(
-	m : &Mesh<BasicV, BasicTE, BasicP, BasicCE>,
-	r : &Renderer<BasicV, BasicTE, BasicP, BasicCE>,
+	_m : &Mesh<BasicV, BasicTE, BasicP, BasicCE>,
+	_r : &Renderer<BasicV, BasicTE, BasicP, BasicCE>,
 ) -> BasicCE {
 	BasicCE {}
 }
