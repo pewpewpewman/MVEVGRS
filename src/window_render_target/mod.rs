@@ -37,8 +37,8 @@ impl WindowState {
 	}
 }
 
-pub struct WindowRenderTarget<'a> {
-	source : &'a mut Renderer,
+pub struct WindowRenderTarget<'a, V, TE, P, CE> {
+	source : &'a mut Renderer<V, TE, P, CE>,
 	//Internal windowing systems need to be inited by winit's application handler callback, so it
 	//must be behind an option
 	window_state : Option<WindowState>,
@@ -46,15 +46,17 @@ pub struct WindowRenderTarget<'a> {
 	keyboard_state : HashSet<KeyCode>,
 }
 
-impl<'a> WindowRenderTarget<'a> {
+impl<'a, V : Clone, TE : Clone, P : Clone, CE : Clone>
+	WindowRenderTarget<'a, V, TE, P, CE>
+{
 	pub fn new(
-		source : &'a mut Renderer
-	) -> Result<WindowRenderTarget<'a>, String> {
+		source : &'a mut Renderer<V, TE, P, CE>
+	) -> Result<WindowRenderTarget<'a, V, TE, P, CE>, String> {
 		let event_loop : EventLoop<()> = EventLoop::new().unwrap();
 
 		event_loop.set_control_flow(ControlFlow::Poll);
 
-		let mut ret : WindowRenderTarget = WindowRenderTarget {
+		let mut ret : WindowRenderTarget<'a, V, TE, P, CE> = WindowRenderTarget {
 			source,
 			window_state : None,
 			keyboard_state : HashSet::new(),
@@ -68,9 +70,11 @@ impl<'a> WindowRenderTarget<'a> {
 	}
 }
 
-impl<'a> ApplicationHandler for WindowRenderTarget<'a> {
+impl<'a, V : Clone, TE : Clone, P : Clone, CE : Clone> ApplicationHandler
+	for WindowRenderTarget<'a, V, TE, P, CE>
+{
 	fn resumed(
-		self: &mut WindowRenderTarget<'a>,
+		self: &mut WindowRenderTarget<'a, V, TE, P, CE>,
 		event_loop : &ActiveEventLoop,
 	) -> () {
 		//Initialize the windowstate now that we have the event loop do the window creating
@@ -121,7 +125,7 @@ impl<'a> ApplicationHandler for WindowRenderTarget<'a> {
 	}
 
 	fn window_event(
-		self: &mut WindowRenderTarget<'a>,
+		self: &mut WindowRenderTarget<'a, V, TE, P, CE>,
 		event_loop : &ActiveEventLoop,
 		_id : WindowId,
 		event : WindowEvent,

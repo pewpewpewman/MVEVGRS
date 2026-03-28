@@ -11,7 +11,9 @@ use glam::{IVec2, Mat4, Vec2, Vec3, Vec3Swizzles, Vec4, Vec4Swizzles};
 use crate::mesh::{Mesh, Triangle};
 use crate::pixel::Pixel;
 
-pub struct Renderer {
+//The main renderer. For information on what these type generics do, please refer to
+//./src/mesh/mod.rs
+pub struct Renderer<V, TE, P, CE> {
 	// Main frame buffer that is written to
 	pub frame_buffer : Vec<Pixel>,
 	// Depth buffer that is used for knowing what tris are visible
@@ -21,17 +23,17 @@ pub struct Renderer {
 	// Camera that holds the camera and projection matrix
 	pub camera : Camera,
 	// Triangles to be rastered
-	pub meshes : Vec<Mesh>,
+	pub meshes : Vec<Mesh<V, TE, P, CE>>,
 	// Update function to run before drawing each frame
-	update_fn : Option<Box<dyn FnMut(&mut Renderer) -> ()>>,
+	update_fn : Option<UpdateFunc<V, TE, P, CE>>,
 }
 
-impl Renderer {
+impl<V : Clone, TE : Clone, P : Clone, CE : Clone> Renderer<V, TE, P, CE> {
 	pub fn new(
 		renderer_settings : RendererSettings,
-		meshes : Vec<Mesh>,
-		update_fn : Option<Box<dyn FnMut(&mut Renderer) -> ()>>,
-	) -> Renderer {
+		meshes : Vec<Mesh<V, TE, P, CE>>,
+		update_fn : Option<Box<dyn FnMut(&mut Renderer<V, TE, P, CE>) -> ()>>,
+	) -> Renderer<V, TE, P, CE> {
 		let pix_area : usize =
 			(renderer_settings.width * renderer_settings.height) as usize;
 
@@ -45,50 +47,54 @@ impl Renderer {
 		}
 	}
 
-	pub fn width(self: &Renderer) -> u32 { self.renderer_settings.width }
+	pub fn width(self: &Renderer<V, TE, P, CE>) -> u32 {
+		self.renderer_settings.width
+	}
 
-	pub fn height(self: &Renderer) -> u32 { self.renderer_settings.height }
+	pub fn height(self: &Renderer<V, TE, P, CE>) -> u32 {
+		self.renderer_settings.height
+	}
 
 	// Helpful conversion functions between
 	// NDC and pixel coordinates and vice
 	// versa
 	pub fn screen_x_to_ndx(
-		self: &Renderer,
+		self: &Renderer<V, TE, P, CE>,
 		x : i32,
 	) -> f32 {
 		x as f32 / self.width() as f32 * 2_f32 - 1_f32
 	}
 
 	pub fn screen_y_to_ndy(
-		self: &Renderer,
+		self: &Renderer<V, TE, P, CE>,
 		y : i32,
 	) -> f32 {
 		(1_f32 - (y as f32 / self.height() as f32)) * 2_f32 - 1_f32
 	}
 
 	pub fn screen_coords_to_ndc(
-		self: &Renderer,
+		self: &Renderer<V, TE, P, CE>,
 		c : IVec2,
 	) -> Vec3 {
 		Vec3::new(self.screen_x_to_ndx(c.x), self.screen_y_to_ndy(c.y), 0_f32)
 	}
 
 	pub fn ndx_to_screen_x(
-		self: &Renderer,
+		self: &Renderer<V, TE, P, CE>,
 		x : f32,
 	) -> i32 {
 		f32::round(self.width() as f32 * ((1_f32 + x) / 2_f32)) as i32
 	}
 
 	pub fn ndy_to_screen_y(
-		self: &Renderer,
+		self: &Renderer<V, TE, P, CE>,
 		y : f32,
 	) -> i32 {
 		f32::round(self.height() as f32 * (1_f32 - ((1_f32 + y) / 2_f32))) as i32
 	}
 
 	pub fn ndc_to_screen_coords(
-		self: &Renderer,
+		self: &Renderer<V, TE, P, CE>,
 		p : &Vec3,
 	) -> IVec2 {
 		IVec2::new(self.ndx_to_screen_x(p.x), self.ndy_to_screen_y(p.y))
@@ -104,29 +110,32 @@ impl Renderer {
 	}
 
 	//A triangle is on screen if any of its points are in NDC range and
-	fn is_tri_visible(t : &Triangle) -> bool { !false }
+	fn is_tri_visible(t : &Triangle<V>) -> bool { !false }
 
 	// Draw a single triangle to the
 	// frame_buffer
 	fn raster_tri(
-		self: &mut Renderer,
-		tri : &Triangle,
+		self: &mut Renderer<V, TE, P, CE>,
+		tri : &Triangle<V>,
 	) -> () {
 		//TODO: make this not clip triangles that are in view but have all 3 points out of NDC
-		if !Renderer::is_tri_visible(tri) {
+		/*
+		if !Renderer::<V, TE, P, CE>::is_tri_visible(tri) {
 			println!("TRI CULLED!");
 			return;
 		}
 
-		let mut x_sorted : [&Vec3; 3] = tri.0.each_ref();
+		//let transformed_verts : [VertexTransformerOut<P>; 3] = [
 
-		x_sorted.sort_by(|a : &&Vec3, b : &&Vec3| -> std::cmp::Ordering {
+		let mut x_sorted : [&V; 3] = tri.0.each_ref();
+
+		x_sorted.sort_by(|a : &&Vec4, b : &&Vec4| -> std::cmp::Ordering {
 			a.x.total_cmp(&b.x)
 		});
 
-		let mut y_sorted : [&Vec3; 3] = tri.0.each_ref();
+		let mut y_sorted : [&Vec4; 3] = tri.0.each_ref();
 
-		y_sorted.sort_by(|a : &&Vec3, b : &&Vec3| -> std::cmp::Ordering {
+		y_sorted.sort_by(|a : &&Vec4, b : &&Vec4| -> std::cmp::Ordering {
 			b.y.total_cmp(&a.y)
 		});
 
@@ -224,21 +233,10 @@ impl Renderer {
 				}
 			}
 		}
+		*/
 	}
 
-	pub fn frame_step(self: &mut Renderer) -> () {
-		//Calling a function that acts on its own struct causes some borrow checker problems, let's
-		//do some shenanigans to please it
-		let mut temp : Option<Box<dyn FnMut(&mut Renderer) -> ()>> =
-			self.update_fn.take();
-
-		if let Some(f) = &mut temp {
-			let f : &mut Box<dyn FnMut(&mut Renderer) -> ()> = f;
-			(f)(self);
-		}
-
-		self.update_fn = temp;
-
+	pub fn draw(self: &mut Renderer<V, TE, P, CE>) -> () {
 		// Raster all triangles
 		self
 			.frame_buffer
@@ -248,19 +246,37 @@ impl Renderer {
 
 		let proj_cam_mat : Mat4 = self.camera.proj_mat * self.camera.camera_mat;
 
-		self.meshes.clone().into_iter().for_each(|m : Mesh| -> () {
-			let proj_cam_model_mat : Mat4 = proj_cam_mat * m.model_mat;
+		self
+			.meshes
+			.clone()
+			.into_iter()
+			.for_each(|m : Mesh<V, TE, P, CE>| -> () {
+				let proj_cam_model_mat : Mat4 = proj_cam_mat * m.model_mat;
 
-			m.tris.iter().for_each(|t : &Triangle| -> () {
-				self.raster_tri(&Triangle::new(
-					proj_cam_model_mat.project_point3(Triangle::default().0[0]),
-					proj_cam_model_mat.project_point3(Triangle::default().0[1]),
-					proj_cam_model_mat.project_point3(Triangle::default().0[2]),
-				));
+				m.tris.iter().for_each(|t : &Triangle<V>| -> () {
+					self.raster_tri(&t);
+				});
 			});
-		});
+	}
+
+	pub fn frame_step(self: &mut Renderer<V, TE, P, CE>) -> () {
+		//Calling a function that acts on its own struct causes some borrow checker problems, let's
+		//do some shenanigans to please it
+		let mut temp : Option<UpdateFunc<V, TE, P, CE>> = self.update_fn.take();
+
+		if let Some(f) = &mut temp {
+			let f : &mut UpdateFunc<V, TE, P, CE> = f;
+			(f)(self);
+		}
+
+		self.update_fn = temp;
+
+		self.draw();
 	}
 }
+
+type UpdateFunc<V, TE, P, CE> =
+	Box<dyn FnMut(&mut Renderer<V, TE, P, CE>) -> ()>;
 
 pub struct RendererSettings {
 	// INTERNAL render width and height - may or may not match up with what the target for
