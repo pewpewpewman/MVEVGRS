@@ -52,57 +52,129 @@ impl<V, TE, P, CE> Mesh<V, TE, P, CE> {
 			vec![
 				//Front Face
 				//Upper Left
-				//Triangle::new(
-				//	Vec3::new(-0.5, 0.5, -0.5),
-				//	Vec3::new(-0.5, -0.5, -0.5),
-				//	Vec3::new(0.5, 0.5, 0.5),
-				//),
-				/*
+				Triangle::new(
+					BasicV {
+						position : Vec3::new(-0.5, -0.5, -0.5),
+						color : Vec3::new(0.0, 1.0, 0.0),
+					},
+					BasicV {
+						position : Vec3::new(0.5, 0.5, -0.5),
+						color : Vec3::new(1.0, 0.0, 0.0),
+					},
+					BasicV {
+						position : Vec3::new(-0.5, 0.5, -0.5),
+						color : Vec3::new(0.0, 0.0, 1.0),
+					},
+				),
 				//Lower Right
 				Triangle::new(
-					Vec3::new(0.5, -0.5, -0.5),
-					Vec3::new(-0.5, -0.5, -0.5),
-					Vec3::new(0.5, 0.5, 0.5),
+					BasicV {
+						position : Vec3::new(0.5, -0.5, -0.5),
+						color : Vec3::new(0.0, 0.0, 1.0),
+					},
+					BasicV {
+						position : Vec3::new(0.5, 0.5, -0.5),
+						color : Vec3::new(1.0, 0.0, 0.0),
+					},
+					BasicV {
+						position : Vec3::new(-0.5, -0.5, -0.5),
+						color : Vec3::new(0.0, 1.0, 0.0),
+					},
 				),
 				//Back Face
 				//Upper Left
 				Triangle::new(
-					Vec3::new(-0.5, 0.5, 0.5),
-					Vec3::new(-0.5, -0.5, 0.5),
-					Vec3::new(0.5, 0.5, 0.5),
+					BasicV {
+						position : Vec3::new(-0.5, -0.5, 0.5),
+						color : Vec3::new(1.0, 0.0, 0.0),
+					},
+					BasicV {
+						position : Vec3::new(-0.5, 0.5, 0.5),
+						color : Vec3::new(0.0, 1.0, 0.0),
+					},
+					BasicV {
+						position : Vec3::new(0.5, 0.5, 0.5),
+						color : Vec3::new(0.0, 0.0, 1.0),
+					},
 				),
 				//Lower Right
 				Triangle::new(
-					Vec3::new(0.5, -0.5, 0.5),
-					Vec3::new(-0.5, -0.5, 0.5),
-					Vec3::new(0.5, 0.5, 0.5),
+					BasicV {
+						position : Vec3::new(0.5, -0.5, 0.5),
+						color : Vec3::new(0.0, 1.0, 0.0),
+					},
+					BasicV {
+						position : Vec3::new(0.5, 0.5, 0.5),
+						color : Vec3::new(1.0, 0.0, 1.0),
+					},
+					BasicV {
+						position : Vec3::new(-0.5, -0.5, 0.5),
+						color : Vec3::new(0.0, 1.0, 0.0),
+					},
 				),
 				//Top Face
 				//Upper Left
 				Triangle::new(
-					Vec3::new(-0.5, 0.5, 0.5),
-					Vec3::new(0.5, 0.5, 0.5),
-					Vec3::new(-0.5, 0.5, -0.5),
+					BasicV {
+						position : Vec3::new(-0.5, 0.5, 0.5),
+						color : Vec3::new(0.0, 0.0, 1.0),
+					},
+					BasicV {
+						position : Vec3::new(0.5, 0.5, 0.5),
+						color : Vec3::new(0.0, 0.0, 1.0),
+					},
+					BasicV {
+						position : Vec3::new(-0.5, 0.5, -0.5),
+						color : Vec3::new(0.0, 0.0, 1.0),
+					},
 				),
 				//Lower Right
 				Triangle::new(
-					Vec3::new(0.5, 0.5, 0.5),
-					Vec3::new(0.5, 0.5, -0.5),
-					Vec3::new(-0.5, 0.5, -0.5),
+					BasicV {
+						position : Vec3::new(0.5, 0.5, 0.5),
+						color : Vec3::new(0.0, 0.0, 1.0),
+					},
+					BasicV {
+						position : Vec3::new(0.5, 0.5, -0.5),
+						color : Vec3::new(0.0, 0.0, 1.0),
+					},
+					BasicV {
+						position : Vec3::new(-0.5, 0.5, -0.5),
+						color : Vec3::new(0.0, 0.0, 1.0),
+					},
 				),
 				//Bottom Face
 				//Upper Left
 				Triangle::new(
-					Vec3::new(-0.5, -0.5, 0.5),
-					Vec3::new(0.5, -0.5, 0.5),
-					Vec3::new(-0.5, -0.5, -0.5),
+					BasicV {
+						position : Vec3::new(-0.5, -0.5, 0.5),
+						color : Vec3::new(0.0, 0.0, 1.0),
+					},
+					BasicV {
+						position : Vec3::new(0.5, -0.5, 0.5),
+						color : Vec3::new(0.0, 0.0, 1.0),
+					},
+					BasicV {
+						position : Vec3::new(-0.5, -0.5, -0.5),
+						color : Vec3::new(0.0, 0.0, 1.0),
+					},
 				),
 				//Lower Right
 				Triangle::new(
-					Vec3::new(0.5, -0.5, 0.5),
-					Vec3::new(0.5, -0.5, -0.5),
-					Vec3::new(-0.5, -0.5, -0.5),
+					BasicV {
+						position : Vec3::new(0.5, -0.5, 0.5),
+						color : Vec3::new(0.0, 0.0, 1.0),
+					},
+					BasicV {
+						position : Vec3::new(0.5, -0.5, -0.5),
+						color : Vec3::new(0.0, 0.0, 1.0),
+					},
+					BasicV {
+						position : Vec3::new(-0.5, -0.5, -0.5),
+						color : Vec3::new(0.0, 0.0, 1.0),
+					},
 				),
+				/*
 				//Right Face
 				//Upper Left
 				Triangle::new(
@@ -128,8 +200,8 @@ impl<V, TE, P, CE> Mesh<V, TE, P, CE> {
 					Vec3::new(-0.5, 0.5, 0.5),
 					Vec3::new(-0.5, -0.5, 0.5),
 					Vec3::new(-0.5, -0.5, -0.5),
-				), */
-				Triangle::default(),
+				),
+				*/
 			],
 			basic_vertex_transformer,
 			basic_pixel_colorer,

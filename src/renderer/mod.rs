@@ -112,17 +112,29 @@ where
 		IVec2::new(self.ndx_to_screen_x(p.x), self.ndy_to_screen_y(p.y))
 	}
 
-	//Test to see if a given point is on screen
-	fn point_in_ndc(p : &Vec3) -> bool {
-		p.xy()
-			.to_array()
-			.iter()
-			.any(|f : &f32| -> bool { *f < -1_f32 || *f > 1_f32 })
-			.not()
-	}
-
 	//A triangle is on screen if any of its points are in NDC range and
-	fn is_tri_visible(_t : &Triangle<V>) -> bool { !false }
+	fn tri_visible(
+		self: &Renderer<V, TE, P, CE>,
+		transformed_verts : &[VertTransOut<P>; 3],
+	) -> bool {
+		transformed_verts
+			.into_iter()
+			.any(|v : &VertTransOut<P>| -> bool { v.pos.x > -1_f32 })
+			&& transformed_verts
+				.into_iter()
+				.any(|v : &VertTransOut<P>| -> bool { v.pos.x < 1_f32 })
+			&& transformed_verts
+				.into_iter()
+				.any(|v : &VertTransOut<P>| -> bool { v.pos.y > -1_f32 })
+			&& transformed_verts
+				.into_iter()
+				.any(|v : &VertTransOut<P>| -> bool { v.pos.y < 1_f32 })
+			&& transformed_verts
+				.into_iter()
+				.any(|v : &VertTransOut<P>| -> bool {
+					v.pos.z > self.camera.near_plane
+				})
+	}
 
 	// Draw a single triangle to the
 	// frame_buffer
@@ -134,12 +146,6 @@ where
 		pixel_colorer : PixelColorer<V, TE, P, CE>,
 		color_env : &CE,
 	) -> () {
-		//TODO: make this not clip triangles that are in view but have all 3 points out of NDC
-		if !Renderer::<V, TE, P, CE>::is_tri_visible(tri) {
-			println!("TRI CULLED!");
-			return;
-		}
-
 		let trans_out : [VertTransOut<P>; 3] =
 			tri.0.map(|v : V| -> VertTransOut<P> {
 				//Apply vertex transformer
@@ -151,6 +157,12 @@ where
 
 				res
 			});
+
+		//TODO: make this not clip triangles that are in view but have all 3 points out of NDC
+		if !self.tri_visible(&trans_out) {
+			//println!("TRI CULLED!!!");
+			return;
+		}
 
 		let mut x_sorted : [&VertTransOut<P>; 3] = trans_out.each_ref();
 
@@ -179,19 +191,13 @@ where
 		// can be under one loop
 		let bounds : [i32; 3] = [top_y, mid_y, bot_y];
 
-		for i in 0..=1_usize {
+		for i in 0..=1 {
 			let initial_y : i32 = bounds[i];
 
-			let final_y : i32 = if top_y != mid_y {
-				bounds[i + 1]
-			} else {
-				bot_y
-			};
+			let final_y : i32 = bounds[i + 1];
 
-			//Prevents near invisible triangles that are drawn as long lines accross the entire
-			//screen
 			if initial_y == final_y {
-				break;
+				continue;
 			}
 
 			// Iterate over lines of triangle - clamped to height for the **PERF**
@@ -270,9 +276,10 @@ where
 						self.frame_buffer.len() - 1,
 					);
 
-					let fill : Pixel = pixel_colorer(&p, &color_env, self);
-
 					if z < self.depth_buffer[pixel_fb_idx] && z > self.camera.near_plane {
+						let fill : Pixel = pixel_colorer(&p, &color_env, self);
+						//let fill : Pixel = Pixel::new(0.4, 0.6, 0.5, 1.0);
+
 						self.frame_buffer[pixel_fb_idx] =
 							if !self.renderer_settings.show_tri_div {
 								fill
@@ -356,8 +363,8 @@ pub struct RendererSettings {
 impl Default for RendererSettings {
 	fn default() -> RendererSettings {
 		RendererSettings {
-			width : 1920 / 2,
-			height : 1080 / 2,
+			width : 320,
+			height : 240,
 			background_col : Pixel::new(0.5, 0.75, 0.9, 0.5),
 			show_tri_div : false,
 		}

@@ -33,14 +33,7 @@ fn main() -> Result<(), ()> {
 
 	let mut renderer : Renderer<BasicV, BasicTE, BasicP, BasicCE> = Renderer::new(
 		RendererSettings::default(),
-		vec![Mesh::new(
-			vec![Triangle::default()],
-			basic_vertex_transformer,
-			basic_pixel_colorer,
-			basic_trans_env_updater,
-			basic_color_env_updater,
-			Mat4::IDENTITY,
-		)],
+		vec![Mesh::<BasicV, BasicTE, BasicP, BasicCE>::unit_cube()],
 		Some(Box::new(
 			move |r : &mut Renderer<BasicV, BasicTE, BasicP, BasicCE>| -> () {
 				last_frame_duration = Instant::now().duration_since(frame_start_time);
@@ -52,11 +45,11 @@ fn main() -> Result<(), ()> {
 					println!("frame rate: {}", 1_f32 / last_frame_duration.as_secs_f32());
 				}
 
-				let _t : f32 = Instant::now().duration_since(start_time).as_secs_f32();
-				r.meshes[0].model_mat = Mat4::from_translation(Vec3::new(0.0, 0.0, 2.0))
-				//* Mat4::from_rotation_x(t)
-				//* Mat4::from_rotation_y(t)
-				//* Mat4::from_rotation_z(t);
+				let t : f32 = Instant::now().duration_since(start_time).as_secs_f32();
+				r.meshes[0].model_mat = Mat4::from_translation(Vec3::new(-1.0, 0.0, 1.0))
+				// * Mat4::from_rotation_x(t)
+				 * Mat4::from_rotation_y(t)
+				// * Mat4::from_rotation_z(t);
 				;
 			},
 		)),
