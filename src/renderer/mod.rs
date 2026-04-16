@@ -6,7 +6,7 @@ mod camera;
 use std::ops::{Add, Mul, Not};
 
 use camera::Camera;
-use glam::{IVec2, Mat4, Vec3, Vec3Swizzles, Vec4Swizzles};
+use glam::{IVec2, Mat3, Mat4, Vec3, Vec3Swizzles, Vec4Swizzles};
 
 use crate::mesh::{
 	Mesh,
@@ -148,14 +148,7 @@ where
 	) -> () {
 		let mut trans_out : [VertTransOut<P>; 3] =
 			tri.0.map(|v : V| -> VertTransOut<P> {
-				//Apply vertex transformer
-				let mut res : VertTransOut<P> =
-					vertex_transformer(&v, transformer_env, self);
-
-				//Apply perspective correction to x and y only
-				res.pos = res.pos.with_xy(res.pos.xy() / res.pos.w);
-
-				res
+				vertex_transformer(&v, transformer_env, self)
 			});
 
 		//TODO: make this not clip triangles that are in view but have all 3 points out of NDC
@@ -181,9 +174,10 @@ where
 		);
 
 		// Perspective space NDC coordinates of scanline ndc y bounds
-		let ndc_top_y : f32 = y_sorted[0].pos.y;
-		let ndc_mid_y : f32 = y_sorted[1].pos.y;
-		let ndc_bot_y : f32 = y_sorted[2].pos.y;
+		// We are applying perspective correction with the w divide
+		let ndc_top_y : f32 = y_sorted[0].pos.y / y_sorted[0].pos.w;
+		let ndc_mid_y : f32 = y_sorted[1].pos.y / y_sorted[1].pos.w;
+		let ndc_bot_y : f32 = y_sorted[2].pos.y / y_sorted[2].pos.w;
 
 		// Camera space Z coordinates
 		let cam_top_z : f32 = y_sorted[0].pos.z;
@@ -195,12 +189,27 @@ where
 		let screen_mid_y : i32 = self.ndy_to_screen_y(ndc_mid_y);
 		let screen_bot_y : i32 = self.ndy_to_screen_y(ndc_bot_y);
 
-		// slices of bounds so the two iterations
-		// can be under one loop
-
+		// slices of bounds so the two iterations can be under one loop
 		let ndc_y_bounds : [f32; 3] = [ndc_top_y, ndc_mid_y, ndc_bot_y];
 		let cam_z_bounds : [f32; 3] = [cam_top_z, cam_mid_z, cam_bot_z];
 		let screen_y_bounds : [i32; 3] = [screen_top_y, screen_mid_y, screen_bot_y];
+
+		//The matrix that converts a point in projected space to a vector of the world space
+		//barycentric coords. The convention we will use is y_sorted[0] is "a", y_sorted[1] is "b" and y_sorted[2] is
+		//"c". Formula is from https://andrewkchan.dev/posts/perspective-interpolation.html
+		let bary_mat : Mat3 = Mat3::from_diagonal(Vec3::new(
+			1_f32 / y_sorted[0].pos.z,
+			1_f32 / y_sorted[1].pos.z,
+			1_f32 / y_sorted[2].pos.z,
+		))
+		.mul(
+			Mat3::from_cols(
+				y_sorted[0].pos.xyz() / y_sorted[0].pos.w,
+				y_sorted[1].pos.xyz() / y_sorted[1].pos.w,
+				y_sorted[2].pos.xyz() / y_sorted[2].pos.w,
+			)
+			.inverse(),
+		);
 
 		for i in 0..=1 {
 			let ndc_initial_y : f32 = ndc_y_bounds[i];
@@ -217,62 +226,34 @@ where
 			}
 
 			let top_edge : i32 = screen_initial_y.clamp(0, self.height() as i32 - 1);
-			let bottom_edge : i32 = screen_final_y.clamp(0, self.height() as i32 - 1);
+			let bot_edge : i32 = screen_final_y.clamp(0, self.height() as i32 - 1);
 
 			// Iterate over lines of triangle - clamped to height for the **PERF**
-			for y in top_edge..=bottom_edge {
+			for y in top_edge..=bot_edge {
 				let ndc_y = self.screen_y_to_ndy(y);
 
 				let t : f32 = (y - screen_initial_y) as f32
 					/ (screen_final_y - screen_initial_y) as f32;
 
-				let t_persp : f32 = (ndc_y - (ndc_initial_y / cam_initial_z))
-					/ ((ndc_final_y / cam_final_z) - (ndc_initial_y / cam_initial_z));
-
 				// We can easily find the y coordinate
 				// from the side formed by 2 lines
 				let mut ndc_lef_x : f32 = <f32 as glam::FloatExt>::lerp(
-					y_sorted[i].pos.x,
-					y_sorted[i + 1].pos.x,
+					y_sorted[i].pos.x / y_sorted[i].pos.w,
+					y_sorted[i + 1].pos.x / y_sorted[i + 1].pos.w,
 					t,
 				);
-
-				let mut lef_z : f32 = <f32 as glam::FloatExt>::lerp(
-					y_sorted[i].pos.z,
-					y_sorted[i + 1].pos.z,
-					t_persp,
-				);
-
-				//Would be nice if we could just use glam's lerp but that would require P types
-				//implementing FloatExt and that's not what thats for
-				let mut lef_p : P = y_sorted[i].colorer_in * (1_f32 - t_persp)
-					+ y_sorted[i + 1].colorer_in * t_persp;
 
 				let t : f32 =
 					(y - screen_top_y) as f32 / (screen_bot_y - screen_top_y) as f32;
 
-				let t_persp : f32 = (ndc_y - (ndc_top_y / cam_top_z))
-					/ ((ndc_bot_y / cam_bot_z) - (ndc_top_y / cam_top_z));
-
 				let mut ndc_rig_x : f32 = <f32 as glam::FloatExt>::lerp(
-					y_sorted[0].pos.x,
-					y_sorted[2].pos.x,
+					y_sorted[0].pos.x / y_sorted[0].pos.w,
+					y_sorted[2].pos.x / y_sorted[2].pos.w,
 					t,
 				);
 
-				let mut rig_z : f32 = <f32 as glam::FloatExt>::lerp(
-					y_sorted[0].pos.z,
-					y_sorted[2].pos.z,
-					t_persp,
-				);
-
-				let mut rig_p : P = y_sorted[0].colorer_in * (1_f32 - t_persp)
-					+ y_sorted[2].colorer_in * t_persp;
-
 				if ndc_lef_x > ndc_rig_x {
 					std::mem::swap(&mut ndc_lef_x, &mut ndc_rig_x);
-					std::mem::swap(&mut lef_z, &mut rig_z);
-					std::mem::swap(&mut lef_p, &mut rig_p);
 				}
 
 				//Put bounds into screen pixel coords
@@ -281,34 +262,34 @@ where
 
 				//Iterate over each horizontal pixel - also clamped for perf and to prevent drawing
 				//in the next scan line
-				let left_edge : i32 = screen_lef_x.clamp(0, self.width() as i32 - 1);
+				let lef_edge : i32 = screen_lef_x.clamp(0, self.width() as i32 - 1);
 				let rig_edge : i32 = screen_rig_x.clamp(0, self.width() as i32 - 1);
-				for x in left_edge..=rig_edge {
-					//PER PIXEL OPERATIONS HERE! :D
 
+				for x in lef_edge..=rig_edge {
+					//PER PIXEL OPERATIONS HERE! :D
 					let ndc_x : f32 = self.screen_x_to_ndx(x);
 
-					//Horizontal interp
-					let t : f32 = ((x as i32) - (screen_lef_x as i32)) as f32
-						/ (screen_rig_x - screen_lef_x) as f32;
+					let [a, b, c] : [f32; 3] = Vec3::normalize(
+						bary_mat * Vec3::new(ndc_x, ndc_y, self.camera.near_plane),
+					)
+					.to_array();
 
-					let t_persp : f32 = (ndc_x - (ndc_lef_x / lef_z))
-						/ ((ndc_rig_x / rig_z) - (ndc_lef_x / lef_z));
-
-					let z : f32 = <f32 as glam::FloatExt>::lerp(lef_z, rig_z, t_persp);
+					let z : f32 = y_sorted[0].pos.z * a
+						+ y_sorted[1].pos.z * b
+						+ y_sorted[2].pos.z * c;
 
 					if z < self.camera.near_plane {
 						continue;
 					}
 
-					//Formula from
-					//https://www.scratchapixel.com/lessons/3d-basic-rendering/rasterization-practical-implementation/perspective-correct-interpolation-vertex-attributes.html
-					let p : P = (lef_p * (1_f32 - t_persp) + rig_p * t_persp);
-
 					let pixel_fb_idx : usize = usize::min(
 						(y * self.width() as i32 + x) as usize,
 						self.frame_buffer.len() - 1,
 					);
+
+					let p : P = y_sorted[0].colorer_in * a
+						+ y_sorted[1].colorer_in * b
+						+ y_sorted[2].colorer_in * c;
 
 					if z < self.depth_buffer[pixel_fb_idx] {
 						let fill : Pixel = pixel_colorer(&p, &color_env, self);
