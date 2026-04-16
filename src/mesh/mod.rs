@@ -55,30 +55,30 @@ impl<V, TE, P, CE> Mesh<V, TE, P, CE> {
 				Triangle::new(
 					BasicV {
 						position : Vec3::new(-0.5, -0.5, -0.5),
-						color : Vec3::new(0.0, 1.0, 0.0),
+						color : Vec3::new(0.0, 0.0, 0.0),
 					},
 					BasicV {
 						position : Vec3::new(0.5, 0.5, -0.5),
-						color : Vec3::new(1.0, 0.0, 0.0),
+						color : Vec3::new(1.0, 1.0, 0.0),
 					},
 					BasicV {
 						position : Vec3::new(-0.5, 0.5, -0.5),
-						color : Vec3::new(0.0, 0.0, 1.0),
+						color : Vec3::new(0.0, 1.0, 0.0),
 					},
 				),
 				//Lower Right
 				Triangle::new(
 					BasicV {
 						position : Vec3::new(0.5, -0.5, -0.5),
-						color : Vec3::new(0.0, 0.0, 1.0),
-					},
-					BasicV {
-						position : Vec3::new(0.5, 0.5, -0.5),
 						color : Vec3::new(1.0, 0.0, 0.0),
 					},
 					BasicV {
+						position : Vec3::new(0.5, 0.5, -0.5),
+						color : Vec3::new(1.0, 1.0, 0.0),
+					},
+					BasicV {
 						position : Vec3::new(-0.5, -0.5, -0.5),
-						color : Vec3::new(0.0, 1.0, 0.0),
+						color : Vec3::new(0.0, 0.0, 0.0),
 					},
 				),
 				//Back Face
@@ -86,30 +86,30 @@ impl<V, TE, P, CE> Mesh<V, TE, P, CE> {
 				Triangle::new(
 					BasicV {
 						position : Vec3::new(-0.5, -0.5, 0.5),
-						color : Vec3::new(1.0, 0.0, 0.0),
+						color : Vec3::new(0.0, 0.0, 1.0),
 					},
 					BasicV {
 						position : Vec3::new(-0.5, 0.5, 0.5),
-						color : Vec3::new(0.0, 1.0, 0.0),
+						color : Vec3::new(0.0, 1.0, 1.0),
 					},
 					BasicV {
 						position : Vec3::new(0.5, 0.5, 0.5),
-						color : Vec3::new(0.0, 0.0, 1.0),
+						color : Vec3::new(1.0, 1.0, 1.0),
 					},
 				),
 				//Lower Right
 				Triangle::new(
 					BasicV {
 						position : Vec3::new(0.5, -0.5, 0.5),
-						color : Vec3::new(0.0, 1.0, 0.0),
-					},
-					BasicV {
-						position : Vec3::new(0.5, 0.5, 0.5),
 						color : Vec3::new(1.0, 0.0, 1.0),
 					},
 					BasicV {
+						position : Vec3::new(0.5, 0.5, 0.5),
+						color : Vec3::new(1.0, 1.0, 1.0),
+					},
+					BasicV {
 						position : Vec3::new(-0.5, -0.5, 0.5),
-						color : Vec3::new(0.0, 1.0, 0.0),
+						color : Vec3::new(0.0, 0.0, 1.0),
 					},
 				),
 				//Top Face
@@ -117,30 +117,30 @@ impl<V, TE, P, CE> Mesh<V, TE, P, CE> {
 				Triangle::new(
 					BasicV {
 						position : Vec3::new(-0.5, 0.5, 0.5),
-						color : Vec3::new(0.0, 0.0, 1.0),
+						color : Vec3::new(0.0, 1.0, 1.0),
 					},
 					BasicV {
 						position : Vec3::new(0.5, 0.5, 0.5),
-						color : Vec3::new(0.0, 0.0, 1.0),
+						color : Vec3::new(1.0, 1.0, 1.0),
 					},
 					BasicV {
 						position : Vec3::new(-0.5, 0.5, -0.5),
-						color : Vec3::new(0.0, 0.0, 1.0),
+						color : Vec3::new(0.0, 1.0, 0.0),
 					},
 				),
 				//Lower Right
 				Triangle::new(
 					BasicV {
 						position : Vec3::new(0.5, 0.5, 0.5),
-						color : Vec3::new(0.0, 0.0, 1.0),
+						color : Vec3::new(1.0, 1.0, 1.0),
 					},
 					BasicV {
 						position : Vec3::new(0.5, 0.5, -0.5),
-						color : Vec3::new(0.0, 0.0, 1.0),
+						color : Vec3::new(1.0, 1.0, 0.0),
 					},
 					BasicV {
 						position : Vec3::new(-0.5, 0.5, -0.5),
-						color : Vec3::new(0.0, 0.0, 1.0),
+						color : Vec3::new(0.0, 1.0, 0.0),
 					},
 				),
 				//Bottom Face
@@ -152,56 +152,132 @@ impl<V, TE, P, CE> Mesh<V, TE, P, CE> {
 					},
 					BasicV {
 						position : Vec3::new(0.5, -0.5, 0.5),
-						color : Vec3::new(0.0, 0.0, 1.0),
+						color : Vec3::new(1.0, 0.0, 1.0),
 					},
 					BasicV {
 						position : Vec3::new(-0.5, -0.5, -0.5),
-						color : Vec3::new(0.0, 0.0, 1.0),
+						color : Vec3::new(0.0, 0.0, 0.0),
 					},
 				),
 				//Lower Right
 				Triangle::new(
 					BasicV {
 						position : Vec3::new(0.5, -0.5, 0.5),
-						color : Vec3::new(0.0, 0.0, 1.0),
+						color : Vec3::new(1.0, 0.0, 1.0),
 					},
 					BasicV {
 						position : Vec3::new(0.5, -0.5, -0.5),
-						color : Vec3::new(0.0, 0.0, 1.0),
+						color : Vec3::new(1.0, 0.0, 0.0),
 					},
 					BasicV {
 						position : Vec3::new(-0.5, -0.5, -0.5),
-						color : Vec3::new(0.0, 0.0, 1.0),
+						color : Vec3::new(0.0, 0.0, 0.0),
 					},
 				),
-				/*
 				//Right Face
 				//Upper Left
 				Triangle::new(
-					Vec3::new(0.5, 0.5, -0.5),
-					Vec3::new(0.5, 0.5, 0.5),
-					Vec3::new(0.5, -0.5, -0.5),
+					BasicV {
+						position : Vec3::new(0.5, 0.5, -0.5),
+						color : Vec3::new(1.0, 1.0, 0.0),
+					},
+					BasicV {
+						position : Vec3::new(0.5, 0.5, 0.5),
+						color : Vec3::new(1.0, 1.0, 1.0),
+					},
+					BasicV {
+						position : Vec3::new(0.5, -0.5, -0.5),
+						color : Vec3::new(1.0, 0.0, 0.0),
+					},
 				),
 				//Lower Right
 				Triangle::new(
-					Vec3::new(0.5, 0.5, 0.5),
-					Vec3::new(0.5, -0.5, 0.5),
-					Vec3::new(0.5, -0.5, -0.5),
+					BasicV {
+						position : Vec3::new(0.5, 0.5, 0.5),
+						color : Vec3::new(1.0, 1.0, 1.0),
+					},
+					BasicV {
+						position : Vec3::new(0.5, -0.5, 0.5),
+						color : Vec3::new(1.0, 0.0, 1.0),
+					},
+					BasicV {
+						position : Vec3::new(0.5, -0.5, -0.5),
+						color : Vec3::new(1.0, 0.0, 0.0),
+					},
 				),
 				//Left Face
 				//Upper Left
 				Triangle::new(
-					Vec3::new(-0.5, 0.5, -0.5),
-					Vec3::new(-0.5, 0.5, 0.5),
-					Vec3::new(-0.5, -0.5, -0.5),
+					BasicV {
+						position : Vec3::new(-0.5, 0.5, 0.5),
+						color : Vec3::new(0.0, 1.0, 1.0),
+					},
+					BasicV {
+						position : Vec3::new(-0.5, 0.5, -0.5),
+						color : Vec3::new(0.0, 1.0, 0.0),
+					},
+					BasicV {
+						position : Vec3::new(-0.5, -0.5, -0.5),
+						color : Vec3::new(0.0, 0.0, 0.0),
+					},
 				),
 				//Lower Right
 				Triangle::new(
-					Vec3::new(-0.5, 0.5, 0.5),
-					Vec3::new(-0.5, -0.5, 0.5),
-					Vec3::new(-0.5, -0.5, -0.5),
+					BasicV {
+						position : Vec3::new(-0.5, 0.5, 0.5),
+						color : Vec3::new(0.0, 1.0, 1.0),
+					},
+					BasicV {
+						position : Vec3::new(-0.5, -0.5, 0.5),
+						color : Vec3::new(0.0, 0.0, 1.0),
+					},
+					BasicV {
+						position : Vec3::new(-0.5, -0.5, -0.5),
+						color : Vec3::new(0.0, 0.0, 0.0),
+					},
 				),
-				*/
+			],
+			basic_vertex_transformer,
+			basic_pixel_colorer,
+			basic_trans_env_updater,
+			basic_color_env_updater,
+			Mat4::IDENTITY,
+		)
+	}
+
+	pub fn unit_plane() -> Mesh<BasicV, BasicTE, BasicP, BasicCE> {
+		Mesh::new(
+			vec![
+				//Back Left
+				Triangle::new(
+					BasicV {
+						position : Vec3::new(-0.5, 0.0, 0.5),
+						color : Vec3::new(0.0, 0.0, 1.0),
+					},
+					BasicV {
+						position : Vec3::new(0.5, 0.0, 0.5),
+						color : Vec3::new(1.0, 0.0, 1.0),
+					},
+					BasicV {
+						position : Vec3::new(-0.5, 0.0, -0.5),
+						color : Vec3::new(0.0, 0.0, 0.0),
+					},
+				),
+				//Front Right
+				Triangle::new(
+					BasicV {
+						position : Vec3::new(0.5, 0.0, 0.5),
+						color : Vec3::new(1.0, 0.0, 1.0),
+					},
+					BasicV {
+						position : Vec3::new(0.5, 0.0, -0.5),
+						color : Vec3::new(1.0, 0.0, 0.0),
+					},
+					BasicV {
+						position : Vec3::new(-0.5, 0.0, -0.5),
+						color : Vec3::new(0.0, 0.0, 0.0),
+					},
+				),
 			],
 			basic_vertex_transformer,
 			basic_pixel_colorer,
@@ -264,7 +340,9 @@ pub type ColorEnvUpdater<V, TE, P, CE> =
 	fn(&Mesh<V, TE, P, CE>, &Renderer<V, TE, P, CE>) -> CE;
 
 //The output of the vertex transformer. The generic
-//type "C" is passed to the pixel coloring function
+//type "P" is interpolated and passed to the pixel
+//coloring function
+#[derive(Debug)]
 pub struct VertTransOut<P> {
 	//This position field is the vertex's position in normalized device coordinates.
 	//PLEASE NOTE!!! THIS VALUE SHOULD **NOT** BE DIVIDED BY W AFTER BEING MULTIPLIED
@@ -276,19 +354,20 @@ pub struct VertTransOut<P> {
 }
 
 //A basic basic of the types put into Mesh's generics
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct BasicV {
 	pub position : Vec3,
 	pub color : Vec3,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct BasicTE {
-	pub pcm_mat : Mat4,
+	pub p_mat : Mat4,
+	pub cm_mat : Mat4,
 }
 
 //TODO: Look into derive ops crate
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct BasicP {
 	pub color : Vec3,
 }
@@ -327,8 +406,12 @@ pub fn basic_vertex_transformer(
 	vert_env : &BasicTE,
 	_rend : &Renderer<BasicV, BasicTE, BasicP, BasicCE>,
 ) -> VertTransOut<BasicP> {
+	let mut pos : Vec4 =
+		vert_env.p_mat * vert_env.cm_mat * Vec4::from((vert_data.position, 1_f32));
+	//pos.z = pos.z.max(0.01_f32);
+
 	VertTransOut {
-		pos : vert_env.pcm_mat * Vec4::from((vert_data.position, 1_f32)),
+		pos,
 		colorer_in : BasicP {
 			color : vert_data.color,
 		},
@@ -349,7 +432,8 @@ pub fn basic_trans_env_updater(
 ) -> BasicTE {
 	BasicTE {
 		//Kinda sucks that proj * camera has to be computed once per mesh now :/
-		pcm_mat : r.camera.proj_mat * r.camera.camera_mat * m.model_mat,
+		p_mat : r.camera.proj_mat,
+		cm_mat : r.camera.camera_mat * m.model_mat,
 	}
 }
 

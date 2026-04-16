@@ -46,9 +46,9 @@ fn main() -> Result<(), ()> {
 				}
 
 				let t : f32 = Instant::now().duration_since(start_time).as_secs_f32();
-				r.meshes[0].model_mat = Mat4::from_translation(Vec3::new(-1.0, 0.0, 1.0))
+				r.meshes[0].model_mat = Mat4::from_translation(Vec3::new(-1.0, -1.0, 1.0))
 				// * Mat4::from_rotation_x(t)
-				 * Mat4::from_rotation_y(t)
+				* Mat4::from_rotation_y( t ) //std::f32::consts::PI / 4_f32)
 				// * Mat4::from_rotation_z(t);
 				;
 			},

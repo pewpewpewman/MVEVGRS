@@ -146,7 +146,7 @@ where
 		pixel_colorer : PixelColorer<V, TE, P, CE>,
 		color_env : &CE,
 	) -> () {
-		let trans_out : [VertTransOut<P>; 3] =
+		let mut trans_out : [VertTransOut<P>; 3] =
 			tri.0.map(|v : V| -> VertTransOut<P> {
 				//Apply vertex transformer
 				let mut res : VertTransOut<P> =
@@ -180,35 +180,58 @@ where
 			},
 		);
 
-		// Screen coordinate of scanline bounds
-		let top_y : i32 = self.ndy_to_screen_y(y_sorted[0].pos.y);
+		// Perspective space NDC coordinates of scanline ndc y bounds
+		let ndc_top_y : f32 = y_sorted[0].pos.y;
+		let ndc_mid_y : f32 = y_sorted[1].pos.y;
+		let ndc_bot_y : f32 = y_sorted[2].pos.y;
 
-		let mid_y : i32 = self.ndy_to_screen_y(y_sorted[1].pos.y);
+		// Camera space Z coordinates
+		let cam_top_z : f32 = y_sorted[0].pos.z;
+		let cam_mid_z : f32 = y_sorted[1].pos.z;
+		let cam_bot_z : f32 = y_sorted[2].pos.z;
 
-		let bot_y : i32 = self.ndy_to_screen_y(y_sorted[2].pos.y);
+		// Screen coordinates of scanline screen y bounds
+		let screen_top_y : i32 = self.ndy_to_screen_y(ndc_top_y);
+		let screen_mid_y : i32 = self.ndy_to_screen_y(ndc_mid_y);
+		let screen_bot_y : i32 = self.ndy_to_screen_y(ndc_bot_y);
 
-		// slice of bounds so the two iterations
+		// slices of bounds so the two iterations
 		// can be under one loop
-		let bounds : [i32; 3] = [top_y, mid_y, bot_y];
+
+		let ndc_y_bounds : [f32; 3] = [ndc_top_y, ndc_mid_y, ndc_bot_y];
+		let cam_z_bounds : [f32; 3] = [cam_top_z, cam_mid_z, cam_bot_z];
+		let screen_y_bounds : [i32; 3] = [screen_top_y, screen_mid_y, screen_bot_y];
 
 		for i in 0..=1 {
-			let initial_y : i32 = bounds[i];
+			let ndc_initial_y : f32 = ndc_y_bounds[i];
+			let ndc_final_y : f32 = ndc_y_bounds[i + 1];
 
-			let final_y : i32 = bounds[i + 1];
+			let cam_initial_z : f32 = cam_z_bounds[i];
+			let cam_final_z : f32 = cam_z_bounds[i + 1];
 
-			if initial_y == final_y {
+			let screen_initial_y : i32 = screen_y_bounds[i];
+			let screen_final_y : i32 = screen_y_bounds[i + 1];
+
+			if screen_initial_y == screen_final_y {
 				continue;
 			}
 
+			let top_edge : i32 = screen_initial_y.clamp(0, self.height() as i32 - 1);
+			let bottom_edge : i32 = screen_final_y.clamp(0, self.height() as i32 - 1);
+
 			// Iterate over lines of triangle - clamped to height for the **PERF**
-			for y in initial_y.clamp(0, self.height() as i32 - 1)
-				..=final_y.clamp(0, self.height() as i32 - 1)
-			{
-				let t : f32 = (y - initial_y) as f32 / (final_y - initial_y) as f32;
+			for y in top_edge..=bottom_edge {
+				let ndc_y = self.screen_y_to_ndy(y);
+
+				let t : f32 = (y - screen_initial_y) as f32
+					/ (screen_final_y - screen_initial_y) as f32;
+
+				let t_persp : f32 = (ndc_y - (ndc_initial_y / cam_initial_z))
+					/ ((ndc_final_y / cam_final_z) - (ndc_initial_y / cam_initial_z));
 
 				// We can easily find the y coordinate
 				// from the side formed by 2 lines
-				let mut lef_x : f32 = <f32 as glam::FloatExt>::lerp(
+				let mut ndc_lef_x : f32 = <f32 as glam::FloatExt>::lerp(
 					y_sorted[i].pos.x,
 					y_sorted[i + 1].pos.x,
 					t,
@@ -217,17 +240,21 @@ where
 				let mut lef_z : f32 = <f32 as glam::FloatExt>::lerp(
 					y_sorted[i].pos.z,
 					y_sorted[i + 1].pos.z,
-					t,
+					t_persp,
 				);
 
 				//Would be nice if we could just use glam's lerp but that would require P types
 				//implementing FloatExt and that's not what thats for
-				let mut lef_p : P =
-					y_sorted[i].colorer_in * (1_f32 - t) + y_sorted[i + 1].colorer_in * t;
+				let mut lef_p : P = y_sorted[i].colorer_in * (1_f32 - t_persp)
+					+ y_sorted[i + 1].colorer_in * t_persp;
 
-				let t : f32 = (y - top_y) as f32 / (bot_y - top_y) as f32;
+				let t : f32 =
+					(y - screen_top_y) as f32 / (screen_bot_y - screen_top_y) as f32;
 
-				let mut rig_x : f32 = <f32 as glam::FloatExt>::lerp(
+				let t_persp : f32 = (ndc_y - (ndc_top_y / cam_top_z))
+					/ ((ndc_bot_y / cam_bot_z) - (ndc_top_y / cam_top_z));
+
+				let mut ndc_rig_x : f32 = <f32 as glam::FloatExt>::lerp(
 					y_sorted[0].pos.x,
 					y_sorted[2].pos.x,
 					t,
@@ -236,49 +263,55 @@ where
 				let mut rig_z : f32 = <f32 as glam::FloatExt>::lerp(
 					y_sorted[0].pos.z,
 					y_sorted[2].pos.z,
-					t,
+					t_persp,
 				);
 
-				let mut rig_p : P =
-					y_sorted[0].colorer_in * (1_f32 - t) + y_sorted[2].colorer_in * t;
+				let mut rig_p : P = y_sorted[0].colorer_in * (1_f32 - t_persp)
+					+ y_sorted[2].colorer_in * t_persp;
 
-				if lef_x > rig_x {
-					std::mem::swap(&mut lef_x, &mut rig_x);
+				if ndc_lef_x > ndc_rig_x {
+					std::mem::swap(&mut ndc_lef_x, &mut ndc_rig_x);
 					std::mem::swap(&mut lef_z, &mut rig_z);
 					std::mem::swap(&mut lef_p, &mut rig_p);
 				}
 
 				//Put bounds into screen pixel coords
-				let lef_x : i32 = self.ndx_to_screen_x(lef_x);
-				let rig_x : i32 = self.ndx_to_screen_x(rig_x);
+				let screen_lef_x : i32 = self.ndx_to_screen_x(ndc_lef_x);
+				let screen_rig_x : i32 = self.ndx_to_screen_x(ndc_rig_x);
 
 				//Iterate over each horizontal pixel - also clamped for perf and to prevent drawing
 				//in the next scan line
-				for x in lef_x.clamp(0, self.width() as i32 - 1)
-					..=rig_x.clamp(0, self.width() as i32 - 1)
-				{
+				let left_edge : i32 = screen_lef_x.clamp(0, self.width() as i32 - 1);
+				let rig_edge : i32 = screen_rig_x.clamp(0, self.width() as i32 - 1);
+				for x in left_edge..=rig_edge {
 					//PER PIXEL OPERATIONS HERE! :D
 
-					//Horizontal interp
-					let t : f32 =
-						((x as i32) - (lef_x as i32)) as f32 / (rig_x - lef_x) as f32;
+					let ndc_x : f32 = self.screen_x_to_ndx(x);
 
-					let z : f32 = 1.0 / ((1.0 / lef_z) * (1.0 - t) + (1.0 / rig_z) * t);
+					//Horizontal interp
+					let t : f32 = ((x as i32) - (screen_lef_x as i32)) as f32
+						/ (screen_rig_x - screen_lef_x) as f32;
+
+					let t_persp : f32 = (ndc_x - (ndc_lef_x / lef_z))
+						/ ((ndc_rig_x / rig_z) - (ndc_lef_x / lef_z));
+
+					let z : f32 = <f32 as glam::FloatExt>::lerp(lef_z, rig_z, t_persp);
+
+					if z < self.camera.near_plane {
+						continue;
+					}
 
 					//Formula from
 					//https://www.scratchapixel.com/lessons/3d-basic-rendering/rasterization-practical-implementation/perspective-correct-interpolation-vertex-attributes.html
-					let p : P = (lef_p * (1_f32 / lef_z) * (1_f32 - t)
-						+ rig_p * (1_f32 / rig_z) * t)
-						* z;
+					let p : P = (lef_p * (1_f32 - t_persp) + rig_p * t_persp);
 
 					let pixel_fb_idx : usize = usize::min(
 						(y * self.width() as i32 + x) as usize,
 						self.frame_buffer.len() - 1,
 					);
 
-					if z < self.depth_buffer[pixel_fb_idx] && z > self.camera.near_plane {
+					if z < self.depth_buffer[pixel_fb_idx] {
 						let fill : Pixel = pixel_colorer(&p, &color_env, self);
-						//let fill : Pixel = Pixel::new(0.4, 0.6, 0.5, 1.0);
 
 						self.frame_buffer[pixel_fb_idx] =
 							if !self.renderer_settings.show_tri_div {
@@ -363,8 +396,8 @@ pub struct RendererSettings {
 impl Default for RendererSettings {
 	fn default() -> RendererSettings {
 		RendererSettings {
-			width : 320,
-			height : 240,
+			width : 320 * 2,
+			height : 240 * 2,
 			background_col : Pixel::new(0.5, 0.75, 0.9, 0.5),
 			show_tri_div : false,
 		}
