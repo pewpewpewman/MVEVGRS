@@ -3,10 +3,10 @@
 
 mod camera;
 
-use std::ops::{Add, Mul, Not};
+use std::ops::{Add, Mul};
 
 use camera::Camera;
-use glam::{IVec2, Mat3, Mat4, Vec3, Vec3Swizzles, Vec4Swizzles};
+use glam::{IVec2, Mat3, Mat4, Vec2, Vec3, Vec3Swizzles, Vec4, Vec4Swizzles};
 
 use crate::mesh::{
 	Mesh,
@@ -16,6 +16,9 @@ use crate::mesh::{
 	VertexTransformer,
 };
 use crate::pixel::Pixel;
+
+type UpdateFunc<V, TE, P, CE> =
+	Box<dyn FnMut(&mut Renderer<V, TE, P, CE>) -> ()>;
 
 //The main renderer. For information on what these type generics do, please refer to
 //./src/mesh/mod.rs
@@ -105,9 +108,9 @@ where
 		f32::round(self.height() as f32 * (1_f32 - ((1_f32 + y) / 2_f32))) as i32
 	}
 
-	pub fn ndc_to_screen_coords(
+	pub fn ndc_to_screen_c(
 		self: &Renderer<V, TE, P, CE>,
-		p : &Vec3,
+		p : Vec2,
 	) -> IVec2 {
 		IVec2::new(self.ndx_to_screen_x(p.x), self.ndy_to_screen_y(p.y))
 	}
@@ -146,109 +149,84 @@ where
 		pixel_colorer : PixelColorer<V, TE, P, CE>,
 		color_env : &CE,
 	) -> () {
-		let mut trans_out : [VertTransOut<P>; 3] =
+		//Vertex information from the vertex transformer
+		let trans_out : [VertTransOut<P>; 3] =
 			tri.0.map(|v : V| -> VertTransOut<P> {
 				vertex_transformer(&v, transformer_env, self)
 			});
 
-		//TODO: make this not clip triangles that are in view but have all 3 points out of NDC
-		if !self.tri_visible(&trans_out) {
-			//println!("TRI CULLED!!!");
-			return;
-		}
-
-		let mut x_sorted : [&VertTransOut<P>; 3] = trans_out.each_ref();
-
-		x_sorted.sort_by(
+		let mut vto_y_sort : [&VertTransOut<P>; 3] = trans_out.each_ref();
+		vto_y_sort.sort_by(
 			|a : &&VertTransOut<P>, b : &&VertTransOut<P>| -> std::cmp::Ordering {
-				a.pos.x.total_cmp(&b.pos.x)
+				(b.pos.y / b.pos.w).total_cmp(&(a.pos.y / a.pos.w))
 			},
 		);
 
-		let mut y_sorted : [&VertTransOut<P>; 3] = trans_out.each_ref();
+		let draw_reigons_ndc : [Vec2; 3] =
+			vto_y_sort.map(|v : &VertTransOut<P>| -> Vec2 {
+				//Just to keep things clean
+				let [x, y, _, w] : [f32; 4] = v.pos.to_array();
+				Vec2::new(x / w, y / w)
+			});
 
-		y_sorted.sort_by(
-			|a : &&VertTransOut<P>, b : &&VertTransOut<P>| -> std::cmp::Ordering {
-				b.pos.y.total_cmp(&a.pos.y)
-			},
-		);
+		let draw_reigons_screen : [IVec2; 3] =
+			draw_reigons_ndc.map(|v : Vec2| -> IVec2 {
+				//We still need to clamp because rounding errors could make us
+				//still write out of bounds, sad i know :(
+				self.ndc_to_screen_c(v).clamp(
+					IVec2::ZERO,
+					IVec2::new(self.width() as i32, self.height() as i32) - IVec2::ONE,
+				)
+			});
 
-		// Perspective space NDC coordinates of scanline ndc y bounds
-		// We are applying perspective correction with the w divide
-		let ndc_top_y : f32 = y_sorted[0].pos.y / y_sorted[0].pos.w;
-		let ndc_mid_y : f32 = y_sorted[1].pos.y / y_sorted[1].pos.w;
-		let ndc_bot_y : f32 = y_sorted[2].pos.y / y_sorted[2].pos.w;
-
-		// Camera space Z coordinates
-		let cam_top_z : f32 = y_sorted[0].pos.z;
-		let cam_mid_z : f32 = y_sorted[1].pos.z;
-		let cam_bot_z : f32 = y_sorted[2].pos.z;
-
-		// Screen coordinates of scanline screen y bounds
-		let screen_top_y : i32 = self.ndy_to_screen_y(ndc_top_y);
-		let screen_mid_y : i32 = self.ndy_to_screen_y(ndc_mid_y);
-		let screen_bot_y : i32 = self.ndy_to_screen_y(ndc_bot_y);
-
-		// slices of bounds so the two iterations can be under one loop
-		let ndc_y_bounds : [f32; 3] = [ndc_top_y, ndc_mid_y, ndc_bot_y];
-		let cam_z_bounds : [f32; 3] = [cam_top_z, cam_mid_z, cam_bot_z];
-		let screen_y_bounds : [i32; 3] = [screen_top_y, screen_mid_y, screen_bot_y];
+		std::thread::sleep_ms(10);
+		dbg!(draw_reigons_ndc);
+		//Vertex info sorted by vertex y coordinate
 
 		//The matrix that converts a point in projected space to a vector of the world space
 		//barycentric coords. The convention we will use is y_sorted[0] is "a", y_sorted[1] is "b" and y_sorted[2] is
 		//"c". Formula is from https://andrewkchan.dev/posts/perspective-interpolation.html
-		let bary_mat : Mat3 = Mat3::from_diagonal(Vec3::new(
-			1_f32 / y_sorted[0].pos.z,
-			1_f32 / y_sorted[1].pos.z,
-			1_f32 / y_sorted[2].pos.z,
-		))
-		.mul(
-			Mat3::from_cols(
-				y_sorted[0].pos.xyz() / y_sorted[0].pos.w,
-				y_sorted[1].pos.xyz() / y_sorted[1].pos.w,
-				y_sorted[2].pos.xyz() / y_sorted[2].pos.w,
-			)
-			.inverse(),
+		let bary_mat : Mat3 = Mat3::mul_mat3(
+			&Mat3::from_diagonal(Vec3::new(
+				1_f32 / vto_y_sort[0].pos.z,
+				1_f32 / vto_y_sort[1].pos.z,
+				1_f32 / vto_y_sort[2].pos.z,
+			)),
+			&Mat3::inverse(&Mat3::from_cols(
+				vto_y_sort[0].pos.xyz() / vto_y_sort[0].pos.w,
+				vto_y_sort[1].pos.xyz() / vto_y_sort[1].pos.w,
+				vto_y_sort[2].pos.xyz() / vto_y_sort[2].pos.w,
+			)),
 		);
 
-		for i in 0..=1 {
-			let ndc_initial_y : f32 = ndc_y_bounds[i];
-			let ndc_final_y : f32 = ndc_y_bounds[i + 1];
+		for i in 0..=1_usize {
+			let loop_initial_y : i32 = draw_reigons_screen[i].y;
+			let loop_final_y : i32 = draw_reigons_screen[i + 1].y;
 
-			let cam_initial_z : f32 = cam_z_bounds[i];
-			let cam_final_z : f32 = cam_z_bounds[i + 1];
-
-			let screen_initial_y : i32 = screen_y_bounds[i];
-			let screen_final_y : i32 = screen_y_bounds[i + 1];
-
-			if screen_initial_y == screen_final_y {
+			if loop_initial_y == loop_final_y {
 				continue;
 			}
 
-			let top_edge : i32 = screen_initial_y.clamp(0, self.height() as i32 - 1);
-			let bot_edge : i32 = screen_final_y.clamp(0, self.height() as i32 - 1);
+			for y in loop_initial_y..=loop_final_y {
+				let ndy = self.screen_y_to_ndy(y);
 
-			// Iterate over lines of triangle - clamped to height for the **PERF**
-			for y in top_edge..=bot_edge {
-				let ndc_y = self.screen_y_to_ndy(y);
-
-				let t : f32 = (y - screen_initial_y) as f32
-					/ (screen_final_y - screen_initial_y) as f32;
+				let t : f32 = (ndy - draw_reigons_ndc[i].y)
+					/ (draw_reigons_ndc[i + 1].y - draw_reigons_ndc[i].y);
 
 				// We can easily find the y coordinate
 				// from the side formed by 2 lines
 				let mut ndc_lef_x : f32 = <f32 as glam::FloatExt>::lerp(
-					y_sorted[i].pos.x / y_sorted[i].pos.w,
-					y_sorted[i + 1].pos.x / y_sorted[i + 1].pos.w,
+					draw_reigons_ndc[i].x,
+					draw_reigons_ndc[i + 1].x,
 					t,
 				);
 
-				let t : f32 =
-					(y - screen_top_y) as f32 / (screen_bot_y - screen_top_y) as f32;
+				let t : f32 = (ndy - draw_reigons_ndc[0].y)
+					/ (draw_reigons_ndc[2].y - draw_reigons_ndc[0].y);
 
 				let mut ndc_rig_x : f32 = <f32 as glam::FloatExt>::lerp(
-					y_sorted[0].pos.x / y_sorted[0].pos.w,
-					y_sorted[2].pos.x / y_sorted[2].pos.w,
+					draw_reigons_ndc[0].x,
+					draw_reigons_ndc[2].x,
 					t,
 				);
 
@@ -265,48 +243,58 @@ where
 				let lef_edge : i32 = screen_lef_x.clamp(0, self.width() as i32 - 1);
 				let rig_edge : i32 = screen_rig_x.clamp(0, self.width() as i32 - 1);
 
+				//Draw red debugging shit
+				let idx : usize = (y * self.width() as i32 + lef_edge) as usize;
+				self.frame_buffer[idx] = Pixel::new(1.0_f32, 0_f32, 0_f32, 1_f32);
+				let idx : usize = (y * self.width() as i32 + rig_edge) as usize;
+				self.frame_buffer[idx] = Pixel::new(1.0_f32, 0_f32, 0_f32, 1_f32);
+
 				for x in lef_edge..=rig_edge {
-					//PER PIXEL OPERATIONS HERE! :D
 					let ndc_x : f32 = self.screen_x_to_ndx(x);
 
-					let [a, b, c] : [f32; 3] = Vec3::normalize(
-						bary_mat * Vec3::new(ndc_x, ndc_y, self.camera.near_plane),
-					)
-					.to_array();
+					let mut bary_v : Vec3 = bary_mat * Vec3::new(ndc_x, ndy, 1_f32);
+					bary_v /= bary_v.element_sum();
+					let [a, b, c] : [f32; 3] = bary_v.to_array();
 
-					let z : f32 = y_sorted[0].pos.z * a
-						+ y_sorted[1].pos.z * b
-						+ y_sorted[2].pos.z * c;
+					if x % 20 == 0 && y % 20 == 0 {
+						//
+					}
 
-					if z < self.camera.near_plane {
+					let z : f32 = (vto_y_sort[0].pos.z * a)
+						+ (vto_y_sort[1].pos.z * b)
+						+ (vto_y_sort[2].pos.z * c);
+
+					let pixel_fb_idx : usize = (y * self.width() as i32 + x) as usize;
+
+					if z < self.camera.near_plane || z > self.depth_buffer[pixel_fb_idx] {
 						continue;
 					}
 
-					let pixel_fb_idx : usize = usize::min(
-						(y * self.width() as i32 + x) as usize,
-						self.frame_buffer.len() - 1,
-					);
+					//PER PIXEL OPERATIONS HERE! :D
 
-					let p : P = y_sorted[0].colorer_in * a
-						+ y_sorted[1].colorer_in * b
-						+ y_sorted[2].colorer_in * c;
+					let p : P = vto_y_sort[0].colorer_in * a
+						+ vto_y_sort[1].colorer_in * b
+						+ vto_y_sort[2].colorer_in * c;
 
-					if z < self.depth_buffer[pixel_fb_idx] {
-						let fill : Pixel = pixel_colorer(&p, &color_env, self);
+					let fill : Pixel = pixel_colorer(&p, &color_env, self);
 
-						self.frame_buffer[pixel_fb_idx] =
-							if !self.renderer_settings.show_tri_div {
+					self.frame_buffer[pixel_fb_idx] =
+						if !self.renderer_settings.show_tri_div {
+							fill
+						} else {
+							if i == 0 {
 								fill
 							} else {
-								if i == 0 {
-									fill
-								} else {
-									Pixel::ONE - fill
-								}
-							};
+								Pixel::ONE - fill
+							}
+						};
 
-						self.depth_buffer[pixel_fb_idx] = z;
-					}
+					let idx : usize = (y * self.width() as i32 + lef_edge) as usize;
+					self.frame_buffer[idx] = Pixel::new(1.0_f32, 0_f32, 0_f32, 1_f32);
+					let idx : usize = (y * self.width() as i32 + rig_edge) as usize;
+					self.frame_buffer[idx] = Pixel::new(1.0_f32, 0_f32, 0_f32, 1_f32);
+
+					self.depth_buffer[pixel_fb_idx] = z;
 				}
 			}
 		}
@@ -344,23 +332,19 @@ where
 	}
 
 	pub fn frame_step(self: &mut Renderer<V, TE, P, CE>) -> () {
-		//Calling a function that acts on its own struct causes some borrow checker problems, let's
-		//do some shenanigans to please it
+		//Calling a function that acts on its own struct causes
+		//some borrow checker problems, let's do some shenanigans
+		//to please it.
 		let mut temp : Option<UpdateFunc<V, TE, P, CE>> = self.update_fn.take();
-
 		if let Some(f) = &mut temp {
 			let f : &mut UpdateFunc<V, TE, P, CE> = f;
 			(f)(self);
 		}
-
 		self.update_fn = temp;
 
 		self.draw();
 	}
 }
-
-type UpdateFunc<V, TE, P, CE> =
-	Box<dyn FnMut(&mut Renderer<V, TE, P, CE>) -> ()>;
 
 pub struct RendererSettings {
 	// INTERNAL render width and height - may or may not match up with what the target for
@@ -379,7 +363,7 @@ impl Default for RendererSettings {
 		RendererSettings {
 			width : 320 * 2,
 			height : 240 * 2,
-			background_col : Pixel::new(0.5, 0.75, 0.9, 0.5),
+			background_col : Pixel::new(0.8, 0.45, 0.3, 0.5),
 			show_tri_div : false,
 		}
 	}

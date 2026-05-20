@@ -96,7 +96,7 @@ where
 							self.source.width(),
 							self.source.height(),
 						)))
-						.with_title(String::from("MVEVGS BIATCH!!"))
+						.with_title(String::from("MVEVGRS BIATCH!!"))
 						.with_window_icon(Some({
 							use image::RgbaImage;
 

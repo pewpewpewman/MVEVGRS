@@ -252,11 +252,11 @@ impl<V, TE, P, CE> Mesh<V, TE, P, CE> {
 				Triangle::new(
 					BasicV {
 						position : Vec3::new(-0.5, 0.0, 0.5),
-						color : Vec3::new(0.0, 0.0, 1.0),
+						color : Vec3::new(1.0, 1.0, 1.0),
 					},
 					BasicV {
 						position : Vec3::new(0.5, 0.0, 0.5),
-						color : Vec3::new(1.0, 0.0, 1.0),
+						color : Vec3::new(1.0, 1.0, 1.0),
 					},
 					BasicV {
 						position : Vec3::new(-0.5, 0.0, -0.5),
@@ -267,11 +267,11 @@ impl<V, TE, P, CE> Mesh<V, TE, P, CE> {
 				Triangle::new(
 					BasicV {
 						position : Vec3::new(0.5, 0.0, 0.5),
-						color : Vec3::new(1.0, 0.0, 1.0),
+						color : Vec3::new(1.0, 1.0, 1.0),
 					},
 					BasicV {
 						position : Vec3::new(0.5, 0.0, -0.5),
-						color : Vec3::new(1.0, 0.0, 0.0),
+						color : Vec3::new(0.0, 0.0, 0.0),
 					},
 					BasicV {
 						position : Vec3::new(-0.5, 0.0, -0.5),
@@ -279,6 +279,19 @@ impl<V, TE, P, CE> Mesh<V, TE, P, CE> {
 					},
 				),
 			],
+			basic_vertex_transformer,
+			basic_pixel_colorer,
+			basic_trans_env_updater,
+			basic_color_env_updater,
+			Mat4::IDENTITY,
+		)
+	}
+}
+
+impl Default for Mesh<BasicV, BasicTE, BasicP, BasicCE> {
+	fn default() -> Mesh<BasicV, BasicTE, BasicP, BasicCE> {
+		Mesh::new(
+			vec![Triangle::default()],
 			basic_vertex_transformer,
 			basic_pixel_colorer,
 			basic_trans_env_updater,
@@ -310,15 +323,15 @@ impl Default for Triangle<BasicV> {
 	fn default() -> Triangle<BasicV> {
 		Triangle::<BasicV>::new(
 			BasicV {
-				position : Vec3::new(0_f32, 0.433012701892, 0_f32),
+				position : Vec3::new(0_f32, 0_f32, 0.433012701892),
 				color : Vec3::new(1.0, 0.0, 0.0),
 			},
 			BasicV {
-				position : Vec3::new(-0.5_f32, -0.433012701892, 0_f32),
+				position : Vec3::new(-0.5_f32, 0_f32, -0.433012701892),
 				color : Vec3::new(0.0, 1.0, 0.0),
 			},
 			BasicV {
-				position : Vec3::new(0.5_f32, -0.433012701892, 0_f32),
+				position : Vec3::new(0.5_f32, 0_f32, -0.433012701892),
 				color : Vec3::new(0.0, 0.0, 1.0),
 			},
 		)
@@ -406,12 +419,10 @@ pub fn basic_vertex_transformer(
 	vert_env : &BasicTE,
 	_rend : &Renderer<BasicV, BasicTE, BasicP, BasicCE>,
 ) -> VertTransOut<BasicP> {
-	let mut pos : Vec4 =
-		vert_env.p_mat * vert_env.cm_mat * Vec4::from((vert_data.position, 1_f32));
-	//pos.z = pos.z.max(0.01_f32);
-
 	VertTransOut {
-		pos,
+		pos : vert_env.p_mat
+			* vert_env.cm_mat
+			* Vec4::from((vert_data.position, 1_f32)),
 		colorer_in : BasicP {
 			color : vert_data.color,
 		},
@@ -424,6 +435,7 @@ pub fn basic_pixel_colorer(
 	_rend : &Renderer<BasicV, BasicTE, BasicP, BasicCE>,
 ) -> Pixel {
 	Vec4::from((color_data.color, 1.0))
+	//Vec4::new(0.8, 0.3, 0.5, 1.0)
 }
 
 pub fn basic_trans_env_updater(
