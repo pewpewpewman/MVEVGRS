@@ -115,30 +115,6 @@ where
 		IVec2::new(self.ndx_to_screen_x(p.x), self.ndy_to_screen_y(p.y))
 	}
 
-	//A triangle is on screen if any of its points are in NDC range and
-	fn tri_visible(
-		self: &Renderer<V, TE, P, CE>,
-		transformed_verts : &[VertTransOut<P>; 3],
-	) -> bool {
-		transformed_verts
-			.into_iter()
-			.any(|v : &VertTransOut<P>| -> bool { v.pos.x > -1_f32 })
-			&& transformed_verts
-				.into_iter()
-				.any(|v : &VertTransOut<P>| -> bool { v.pos.x < 1_f32 })
-			&& transformed_verts
-				.into_iter()
-				.any(|v : &VertTransOut<P>| -> bool { v.pos.y > -1_f32 })
-			&& transformed_verts
-				.into_iter()
-				.any(|v : &VertTransOut<P>| -> bool { v.pos.y < 1_f32 })
-			&& transformed_verts
-				.into_iter()
-				.any(|v : &VertTransOut<P>| -> bool {
-					v.pos.z > self.camera.near_plane
-				})
-	}
-
 	// Draw a single triangle to the
 	// frame_buffer
 	fn raster_tri(
@@ -155,149 +131,153 @@ where
 				vertex_transformer(&v, transformer_env, self)
 			});
 
-		let mut vto_y_sort : [&VertTransOut<P>; 3] = trans_out.each_ref();
-		vto_y_sort.sort_by(
-			|a : &&VertTransOut<P>, b : &&VertTransOut<P>| -> std::cmp::Ordering {
-				(b.pos.y / b.pos.w).total_cmp(&(a.pos.y / a.pos.w))
-			},
-		);
+		//Only needed to make further references to
+		//vertex coords cleaner
+		let tri_points : [Vec4; 3] = trans_out
+			.each_ref()
+			.map(|vto : &VertTransOut<P>| -> Vec4 { vto.pos });
 
-		let draw_reigons_ndc : [Vec2; 3] =
-			vto_y_sort.map(|v : &VertTransOut<P>| -> Vec2 {
-				//Just to keep things clean
-				let [x, y, _, w] : [f32; 4] = v.pos.to_array();
-				Vec2::new(x / w, y / w)
-			});
+		//Points on the convex polygon that results from clipping - Praying
+		//to the rust compiler that it smartly eliminates heap allocations
+		let mut poly_points : Vec<Vec4> = Vec::with_capacity(6);
 
-		let draw_reigons_screen : [IVec2; 3] =
-			draw_reigons_ndc.map(|v : Vec2| -> IVec2 {
-				//We still need to clamp because rounding errors could make us
-				//still write out of bounds, sad i know :(
-				self.ndc_to_screen_c(v).clamp(
-					IVec2::ZERO,
-					IVec2::new(self.width() as i32, self.height() as i32) - IVec2::ONE,
-				)
-			});
+		//Iterate over every pair of points, then iterate over each
+		//coordinate to be clipped, then iterate over each sign of
+		//that coordinate, and then clip
+		tri_points
+			.iter()
+			.enumerate()
+			.for_each(|(i, v1) : (usize, &Vec4)| -> () {
+				if tri_points.iter().enumerate().all(
+					|(j, v2) : (usize, &Vec4)| -> bool {
+						if i == j {
+							return true;
+						}
 
-		std::thread::sleep_ms(10);
-		dbg!(draw_reigons_ndc);
-		//Vertex info sorted by vertex y coordinate
-
-		//The matrix that converts a point in projected space to a vector of the world space
-		//barycentric coords. The convention we will use is y_sorted[0] is "a", y_sorted[1] is "b" and y_sorted[2] is
-		//"c". Formula is from https://andrewkchan.dev/posts/perspective-interpolation.html
-		let bary_mat : Mat3 = Mat3::mul_mat3(
-			&Mat3::from_diagonal(Vec3::new(
-				1_f32 / vto_y_sort[0].pos.z,
-				1_f32 / vto_y_sort[1].pos.z,
-				1_f32 / vto_y_sort[2].pos.z,
-			)),
-			&Mat3::inverse(&Mat3::from_cols(
-				vto_y_sort[0].pos.xyz() / vto_y_sort[0].pos.w,
-				vto_y_sort[1].pos.xyz() / vto_y_sort[1].pos.w,
-				vto_y_sort[2].pos.xyz() / vto_y_sort[2].pos.w,
-			)),
-		);
-
-		for i in 0..=1_usize {
-			let loop_initial_y : i32 = draw_reigons_screen[i].y;
-			let loop_final_y : i32 = draw_reigons_screen[i + 1].y;
-
-			if loop_initial_y == loop_final_y {
-				continue;
-			}
-
-			for y in loop_initial_y..=loop_final_y {
-				let ndy = self.screen_y_to_ndy(y);
-
-				let t : f32 = (ndy - draw_reigons_ndc[i].y)
-					/ (draw_reigons_ndc[i + 1].y - draw_reigons_ndc[i].y);
-
-				// We can easily find the y coordinate
-				// from the side formed by 2 lines
-				let mut ndc_lef_x : f32 = <f32 as glam::FloatExt>::lerp(
-					draw_reigons_ndc[i].x,
-					draw_reigons_ndc[i + 1].x,
-					t,
-				);
-
-				let t : f32 = (ndy - draw_reigons_ndc[0].y)
-					/ (draw_reigons_ndc[2].y - draw_reigons_ndc[0].y);
-
-				let mut ndc_rig_x : f32 = <f32 as glam::FloatExt>::lerp(
-					draw_reigons_ndc[0].x,
-					draw_reigons_ndc[2].x,
-					t,
-				);
-
-				if ndc_lef_x > ndc_rig_x {
-					std::mem::swap(&mut ndc_lef_x, &mut ndc_rig_x);
+						(0..=1_usize).all(|c : usize| -> bool {
+							[-1_f32, 1_f32].into_iter().all(|mut s : f32| -> bool {
+								if v1[c] > v1.w && v2[c] < v2.w {
+									//Formula from
+									//https://www.cs.ucr.edu/~shinar/courses/cs130-winter-2021/content/clipping.pdf
+									//It brings me immeasurable pain to use something from UCR -
+									//but it is my only hope...
+									let alpha : f32 =
+										(s * v2.w - v2[c]) / (v1[c] + s * -v1.w + s * v2.w - v2[c]);
+									poly_points.push(alpha * v1 + (1_f32 - alpha) * v2);
+									return false;
+								} else {
+									return true;
+								}
+							})
+						})
+					},
+				) {
+					poly_points.push(*v1);
 				}
+			});
 
-				//Put bounds into screen pixel coords
-				let screen_lef_x : i32 = self.ndx_to_screen_x(ndc_lef_x);
-				let screen_rig_x : i32 = self.ndx_to_screen_x(ndc_rig_x);
+		dbg!(poly_points.len());
 
-				//Iterate over each horizontal pixel - also clamped for perf and to prevent drawing
-				//in the next scan line
-				let lef_edge : i32 = screen_lef_x.clamp(0, self.width() as i32 - 1);
-				let rig_edge : i32 = screen_rig_x.clamp(0, self.width() as i32 - 1);
+		//Perspective divide
+		poly_points.iter_mut().for_each(|v : &mut Vec4| -> () {
+			*v = Vec4::from((v.xyz() / v.w, v.w));
+		});
 
-				//Draw red debugging shit
-				let idx : usize = (y * self.width() as i32 + lef_edge) as usize;
-				self.frame_buffer[idx] = Pixel::new(1.0_f32, 0_f32, 0_f32, 1_f32);
-				let idx : usize = (y * self.width() as i32 + rig_edge) as usize;
-				self.frame_buffer[idx] = Pixel::new(1.0_f32, 0_f32, 0_f32, 1_f32);
+		/*
+		poly_points = vec![
+			Vec4::new(0.35, 0.17, 1_f32, 1_f32),
+			Vec4::new(0.248, 0.398, 1_f32, 1_f32),
+			Vec4::new(-0.472, 0.609, 1_f32, 1_f32),
+			Vec4::new(-0.58, -0.126, 1_f32, 1_f32),
+			Vec4::new(-0.016, -0.692, 1_f32, 1_f32),
+			Vec4::new(0.299, -0.396, 1_f32, 1_f32),
+			Vec4::new(-0.411, -0.547, 1_f32, 1_f32),
+		];
+		*/
 
-				for x in lef_edge..=rig_edge {
-					let ndc_x : f32 = self.screen_x_to_ndx(x);
+		poly_points.sort_by(|a : &Vec4, b : &Vec4| -> std::cmp::Ordering {
+			b.y.total_cmp(&a.y)
+		});
 
-					let mut bary_v : Vec3 = bary_mat * Vec3::new(ndc_x, ndy, 1_f32);
-					bary_v /= bary_v.element_sum();
-					let [a, b, c] : [f32; 3] = bary_v.to_array();
+		poly_points[0..=poly_points.len() - 3]
+			.iter()
+			.enumerate()
+			.for_each(|(i, p) : (usize, &Vec4)| -> () {
+				let lef_pnt : Vec2 = poly_points[i + 1..]
+					.iter()
+					.find(|a : &&Vec4| -> bool { a.x <= p.x })
+					.map_or(poly_points[i + 2].xy(), |v : &Vec4| -> Vec2 { v.xy() });
 
-					if x % 20 == 0 && y % 20 == 0 {
-						//
-					}
+				let rig_pnt : Vec2 = poly_points[i + 1..]
+					.iter()
+					.find(|a : &&Vec4| -> bool { a.x >= p.x })
+					.map_or(poly_points[i + 2].xy(), |v : &Vec4| -> Vec2 { v.xy() });
 
-					let z : f32 = (vto_y_sort[0].pos.z * a)
-						+ (vto_y_sort[1].pos.z * b)
-						+ (vto_y_sort[2].pos.z * c);
+				let lef_is_mid : bool = lef_pnt.y > rig_pnt.y;
+				let y_sorted : [Vec2; 3] = if lef_is_mid {
+					[p.xy(), lef_pnt, rig_pnt]
+				} else {
+					[p.xy(), rig_pnt, lef_pnt]
+				};
 
-					let pixel_fb_idx : usize = (y * self.width() as i32 + x) as usize;
+				let y_sorted_screen : [i32; 3] =
+					y_sorted.map(|v : Vec2| -> i32 { self.ndy_to_screen_y(v.y) });
 
-					if z < self.camera.near_plane || z > self.depth_buffer[pixel_fb_idx] {
-						continue;
-					}
+				//Iterate over the triangle in two segments
+				(0..=1_usize).for_each(|j : usize| -> () {
+					//Iterate the top to the mid point in the first iteration
+					//and then from the mid point to the bottom in the second
+					(y_sorted_screen[j]..y_sorted_screen[j + 1]).for_each(
+						|y_screen : i32| -> () {
+							let y_ndc : f32 = self.screen_y_to_ndy(y_screen);
+							//t used to lerp between the unbroken edge of the triangle
+							let full_t : f32 =
+								(y_ndc - y_sorted[0].y) / (y_sorted[2].y - y_sorted[0].y);
 
-					//PER PIXEL OPERATIONS HERE! :D
+							//t used to lerp between the 2 broken edges of the triangle
+							let part_t : f32 =
+								(y_ndc - y_sorted[j].y) / (y_sorted[j + 1].y - y_sorted[j].y);
 
-					let p : P = vto_y_sort[0].colorer_in * a
-						+ vto_y_sort[1].colorer_in * b
-						+ vto_y_sort[2].colorer_in * c;
+							let mut full_x : f32 =
+								y_sorted[0].x + (y_sorted[2].x - y_sorted[0].x) * full_t;
 
-					let fill : Pixel = pixel_colorer(&p, &color_env, self);
+							let mut part_x : f32 =
+								y_sorted[j].x + (y_sorted[j + 1].x - y_sorted[j].x) * part_t;
 
-					self.frame_buffer[pixel_fb_idx] =
-						if !self.renderer_settings.show_tri_div {
-							fill
-						} else {
-							if i == 0 {
-								fill
-							} else {
-								Pixel::ONE - fill
+							if full_x > part_x {
+								std::mem::swap(&mut full_x, &mut part_x)
 							}
-						};
 
-					let idx : usize = (y * self.width() as i32 + lef_edge) as usize;
-					self.frame_buffer[idx] = Pixel::new(1.0_f32, 0_f32, 0_f32, 1_f32);
-					let idx : usize = (y * self.width() as i32 + rig_edge) as usize;
-					self.frame_buffer[idx] = Pixel::new(1.0_f32, 0_f32, 0_f32, 1_f32);
+							let init_x : i32 = self.ndx_to_screen_x(full_x);
+							let fina_x : i32 = self.ndx_to_screen_x(part_x);
 
-					self.depth_buffer[pixel_fb_idx] = z;
-				}
-			}
-		}
+							(init_x..fina_x).for_each(|x_screen : i32| -> () {
+								let fb_idx : usize =
+									((y_screen * self.width() as i32) + x_screen) as usize;
+
+								self.frame_buffer[fb_idx] = Vec4::new(full_t, part_t, 0.0, 1.0);
+							});
+						},
+					);
+				});
+
+				//MARK VERTICES ON TRIANGLE IN RED
+				[p.xy(), lef_pnt, rig_pnt]
+					.into_iter()
+					.for_each(|v : Vec2| -> () {
+						let y : i32 = self.ndy_to_screen_y(v.y);
+						let x : i32 = self.ndx_to_screen_x(v.x);
+						(-2..=2).for_each(|x_offset : i32| -> () {
+							(-2..=2).for_each(|y_offset : i32| -> () {
+								let fb_idx : usize = (((y + y_offset) * self.width() as i32)
+									+ x + x_offset) as usize;
+
+								self.frame_buffer[fb_idx] = Vec4::new(1.0, 0.0, 0.0, 1.0);
+							});
+						});
+					});
+				//END OF RED DEBUG VERTS
+			});
 	}
 
 	pub fn draw(self: &mut Renderer<V, TE, P, CE>) -> () {
