@@ -323,7 +323,7 @@ impl Default for Triangle<BasicV> {
 	fn default() -> Triangle<BasicV> {
 		Triangle::<BasicV>::new(
 			BasicV {
-				position : Vec3::new(0_f32, 0_f32, 0.433012701892),
+				position : Vec3::new(-0.0_f32, 0_f32, 0.433012701892),
 				color : Vec3::new(1.0, 0.0, 0.0),
 			},
 			BasicV {

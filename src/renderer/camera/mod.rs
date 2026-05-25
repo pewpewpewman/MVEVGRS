@@ -8,6 +8,7 @@ pub struct Camera {
 	pub proj_mat : Mat4,
 	//Near clipping plane
 	pub near_plane : f32,
+	pub far_plane : f32,
 }
 
 impl Default for Camera {
@@ -23,6 +24,7 @@ impl Default for Camera {
 				far_plane,
 			),
 			near_plane,
+			far_plane,
 		}
 	}
 }

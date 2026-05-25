@@ -3,6 +3,7 @@
 
 mod camera;
 
+use std::cmp::Ordering;
 use std::ops::{Add, Mul};
 
 use camera::Camera;
@@ -131,87 +132,92 @@ where
 				vertex_transformer(&v, transformer_env, self)
 			});
 
-		//Only needed to make further references to
-		//vertex coords cleaner
-		let tri_points : [Vec4; 3] = trans_out
+		let vert_pos : [Vec4; 3] = trans_out
 			.each_ref()
 			.map(|vto : &VertTransOut<P>| -> Vec4 { vto.pos });
 
-		//Points on the convex polygon that results from clipping - Praying
-		//to the rust compiler that it smartly eliminates heap allocations
-		let mut poly_points : Vec<Vec4> = Vec::with_capacity(6);
-
-		//Iterate over every pair of points, then iterate over each
-		//coordinate to be clipped, then iterate over each sign of
-		//that coordinate, and then clip
-		tri_points
-			.iter()
-			.enumerate()
-			.for_each(|(i, v1) : (usize, &Vec4)| -> () {
-				if tri_points.iter().enumerate().all(
-					|(j, v2) : (usize, &Vec4)| -> bool {
-						if i == j {
-							return true;
+		let mut poly_points : Vec<Vec4> = vert_pos.into_iter().enumerate().fold(
+			Vec::<Vec4>::with_capacity(6),
+			|mut pp : Vec<Vec4>, (i, a) : (usize, Vec4)| -> Vec<Vec4> {
+				[vert_pos[(i + 1) % 3], vert_pos[(i + 2) % 3]]
+					.into_iter()
+					.for_each(|b : Vec4| -> () {
+						if a.x > a.w && b.x < b.w {
+							let alpha : f32 = (b.w - b.x) / (a.x - a.w + b.w - b.x);
+							pp.push(a * alpha + (1_f32 - alpha) * b);
+						} else if a.y > a.w && b.y < b.w {
+							let alpha : f32 = (b.w - b.y) / (a.y - a.w + b.w - b.y);
+							pp.push(a * alpha + (1_f32 - alpha) * b);
+						} else if a.y < -a.w && b.y > -b.w {
+							let alpha : f32 = (-b.w - b.y) / (a.y - -a.w + -b.w - b.y);
+							pp.push(a * alpha + (1_f32 - alpha) * b);
+						} else if a.x < -a.w && b.x > -b.w {
+							let alpha : f32 = (-b.w - b.x) / (a.x - -a.w + -b.w - b.x);
+							pp.push(a * alpha + (1_f32 - alpha) * b);
 						}
+					});
 
-						(0..=1_usize).all(|c : usize| -> bool {
-							[-1_f32, 1_f32].into_iter().all(|mut s : f32| -> bool {
-								if v1[c] > v1.w && v2[c] < v2.w {
-									//Formula from
-									//https://www.cs.ucr.edu/~shinar/courses/cs130-winter-2021/content/clipping.pdf
-									//It brings me immeasurable pain to use something from UCR -
-									//but it is my only hope...
-									let alpha : f32 =
-										(s * v2.w - v2[c]) / (v1[c] + s * -v1.w + s * v2.w - v2[c]);
-									poly_points.push(alpha * v1 + (1_f32 - alpha) * v2);
-									return false;
-								} else {
-									return true;
-								}
-							})
-						})
-					},
-				) {
-					poly_points.push(*v1);
+				if a.x < a.w && a.x > -a.w && a.y < a.w && a.y > -a.w
+				//&& a.z > self.camera.near_plane
+				//&& a.z < self.camera.far_plane
+				{
+					pp.push(a);
 				}
-			});
+				pp
+			},
+		);
 
-		dbg!(poly_points.len());
+		if poly_points.len() < 3 {
+			//println!("TRIANGLE CULLED");
+			return;
+		}
 
 		//Perspective divide
 		poly_points.iter_mut().for_each(|v : &mut Vec4| -> () {
-			*v = Vec4::from((v.xyz() / v.w, v.w));
+			*v = Vec4::from((v.xyz() / v.w, v.w))
 		});
 
-		/*
-		poly_points = vec![
-			Vec4::new(0.35, 0.17, 1_f32, 1_f32),
-			Vec4::new(0.248, 0.398, 1_f32, 1_f32),
-			Vec4::new(-0.472, 0.609, 1_f32, 1_f32),
-			Vec4::new(-0.58, -0.126, 1_f32, 1_f32),
-			Vec4::new(-0.016, -0.692, 1_f32, 1_f32),
-			Vec4::new(0.299, -0.396, 1_f32, 1_f32),
-			Vec4::new(-0.411, -0.547, 1_f32, 1_f32),
-		];
-		*/
+		poly_points = [
+			Vec2::new(0.0, 0.9),
+			Vec2::new(-0.5, 0.7),
+			Vec2::new(0.8, 0.7),
+			Vec2::new(0.2, 0.3),
+			Vec2::new(-0.7, 0.0),
+			Vec2::new(-0.3, -0.8),
+			Vec2::new(0.0, -0.8),
+			Vec2::new(-0.5, -0.7),
+		]
+		.into_iter()
+		.map(|v : Vec2| -> Vec4 { Vec4::new(v.x, v.y, 1_f32, 1_f32) })
+		.collect::<Vec<Vec4>>();
 
-		poly_points.sort_by(|a : &Vec4, b : &Vec4| -> std::cmp::Ordering {
-			b.y.total_cmp(&a.y)
+		//Order points by height - ties need to be broken by
+		//putting the right point first
+		poly_points.sort_by(|a : &Vec4, b : &Vec4| -> Ordering {
+			b.y
+				.total_cmp(&a.y)
+				.then_with(|| -> Ordering { a.x.total_cmp(&b.x) })
 		});
 
 		poly_points[0..=poly_points.len() - 3]
 			.iter()
 			.enumerate()
 			.for_each(|(i, p) : (usize, &Vec4)| -> () {
-				let lef_pnt : Vec2 = poly_points[i + 1..]
-					.iter()
-					.find(|a : &&Vec4| -> bool { a.x <= p.x })
-					.map_or(poly_points[i + 2].xy(), |v : &Vec4| -> Vec2 { v.xy() });
+				let j : usize = if p.y != poly_points[i + 1].y {
+					0
+				} else {
+					1
+				};
 
-				let rig_pnt : Vec2 = poly_points[i + 1..]
+				let mut lef_pnt : Vec2 = poly_points[i + 1..i + 2 + j]
 					.iter()
-					.find(|a : &&Vec4| -> bool { a.x >= p.x })
-					.map_or(poly_points[i + 2].xy(), |v : &Vec4| -> Vec2 { v.xy() });
+					.find(|a : &&Vec4| -> bool { a.x < p.x })
+					.map_or(poly_points[i + 2 + j].xy(), |v : &Vec4| -> Vec2 { v.xy() });
+
+				let mut rig_pnt : Vec2 = poly_points[i + 1..i + 2 + j]
+					.iter()
+					.find(|a : &&Vec4| -> bool { a.x > p.x })
+					.map_or(poly_points[i + 2 + j].xy(), |v : &Vec4| -> Vec2 { v.xy() });
 
 				let lef_is_mid : bool = lef_pnt.y > rig_pnt.y;
 				let y_sorted : [Vec2; 3] = if lef_is_mid {
@@ -227,56 +233,83 @@ where
 				(0..=1_usize).for_each(|j : usize| -> () {
 					//Iterate the top to the mid point in the first iteration
 					//and then from the mid point to the bottom in the second
-					(y_sorted_screen[j]..y_sorted_screen[j + 1]).for_each(
-						|y_screen : i32| -> () {
-							let y_ndc : f32 = self.screen_y_to_ndy(y_screen);
-							//t used to lerp between the unbroken edge of the triangle
-							let full_t : f32 =
-								(y_ndc - y_sorted[0].y) / (y_sorted[2].y - y_sorted[0].y);
+					let init_y : i32 = y_sorted_screen[j];
+					let fina_y : i32 = y_sorted_screen[j + 1];
+					(init_y..fina_y).for_each(|y_screen : i32| -> () {
+						let y_ndc : f32 = self.screen_y_to_ndy(y_screen);
+						//t used to lerp along the unbroken edge of the triangle
+						let full_t : f32 =
+							(y_ndc - y_sorted[0].y) / (y_sorted[2].y - y_sorted[0].y);
 
-							//t used to lerp between the 2 broken edges of the triangle
-							let part_t : f32 =
-								(y_ndc - y_sorted[j].y) / (y_sorted[j + 1].y - y_sorted[j].y);
+						//t used to lerp along the 2 broken edges of the triangle
+						let part_t : f32 =
+							(y_ndc - y_sorted[j].y) / (y_sorted[j + 1].y - y_sorted[j].y);
 
-							let mut full_x : f32 =
-								y_sorted[0].x + (y_sorted[2].x - y_sorted[0].x) * full_t;
+						let mut full_x : f32 =
+							y_sorted[0].x + (y_sorted[2].x - y_sorted[0].x) * full_t;
 
-							let mut part_x : f32 =
-								y_sorted[j].x + (y_sorted[j + 1].x - y_sorted[j].x) * part_t;
+						let mut part_x : f32 =
+							y_sorted[j].x + (y_sorted[j + 1].x - y_sorted[j].x) * part_t;
 
-							if full_x > part_x {
-								std::mem::swap(&mut full_x, &mut part_x)
-							}
+						let (init_x, fina_x) : (f32, f32) = if full_x > part_x {
+							(part_x, full_x)
+						} else {
+							(full_x, part_x)
+						};
 
-							let init_x : i32 = self.ndx_to_screen_x(full_x);
-							let fina_x : i32 = self.ndx_to_screen_x(part_x);
+						let init_x : i32 = self.ndx_to_screen_x(init_x);
+						let fina_x : i32 = self.ndx_to_screen_x(fina_x);
 
-							(init_x..fina_x).for_each(|x_screen : i32| -> () {
-								let fb_idx : usize =
-									((y_screen * self.width() as i32) + x_screen) as usize;
+						(init_x..fina_x).for_each(|x_screen : i32| -> () {
+							let fb_idx : usize =
+								((y_screen * (self.width()) as i32) + x_screen) as usize;
 
-								self.frame_buffer[fb_idx] = Vec4::new(full_t, part_t, 0.0, 1.0);
-							});
-						},
-					);
+							let debug_col : Vec4 = Vec4::new(
+								full_t,
+								if x_screen == init_x || x_screen == fina_x - 1 {
+									1.0
+								} else {
+									0.0
+								},
+								if y_screen == init_y || y_screen == fina_y - 1 {
+									1.0
+								} else {
+									0.0
+								},
+								1.0,
+							);
+
+							let fill_col : Vec4 = Vec4::new(full_t, part_t, 0.7, 1.0);
+
+							self.frame_buffer[fb_idx] = fill_col;
+						});
+					});
 				});
 
-				//MARK VERTICES ON TRIANGLE IN RED
-				[p.xy(), lef_pnt, rig_pnt]
-					.into_iter()
-					.for_each(|v : Vec2| -> () {
+				//MARK VERTICES ON TRIANGLE IN COLORS
+				[p.xy(), lef_pnt, rig_pnt].into_iter().enumerate().for_each(
+					|(i, v) : (usize, Vec2)| -> () {
 						let y : i32 = self.ndy_to_screen_y(v.y);
 						let x : i32 = self.ndx_to_screen_x(v.x);
 						(-2..=2).for_each(|x_offset : i32| -> () {
 							(-2..=2).for_each(|y_offset : i32| -> () {
-								let fb_idx : usize = (((y + y_offset) * self.width() as i32)
-									+ x + x_offset) as usize;
+								let fb_idx : usize = usize::clamp(
+									(((y + y_offset) * self.width() as i32) + x + x_offset)
+										as usize,
+									0,
+									self.frame_buffer.len() - 1,
+								);
 
-								self.frame_buffer[fb_idx] = Vec4::new(1.0, 0.0, 0.0, 1.0);
+								self.frame_buffer[fb_idx] = [
+									Vec4::new(1.0, 0.0, 0.0, 1.0),
+									Vec4::new(0.0, 1.0, 0.0, 1.0),
+									Vec4::new(0.0, 0.0, 1.0, 1.0),
+								][i % 3];
 							});
 						});
-					});
-				//END OF RED DEBUG VERTS
+					},
+				);
+				//END OF COLORED  DEBUG VERTS
 			});
 	}
 
