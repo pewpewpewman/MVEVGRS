@@ -20,25 +20,20 @@ fn main() -> Result<(), ()> {
 
 	let mut renderer : Renderer<BasicV, BasicTE, BasicP, BasicCE> = Renderer::new(
 		RendererSettings::default(),
-		vec![Mesh::<BasicV, BasicTE, BasicP, BasicCE>::default()],
-		//vec![Mesh::<BasicV, BasicTE, BasicP, BasicCE>::unit_cube()],
+		//vec![Mesh::<BasicV, BasicTE, BasicP, BasicCE>::default()],
+		vec![Mesh::<BasicV, BasicTE, BasicP, BasicCE>::unit_cube()],
 		Some(Box::new(
 			move |r : &mut Renderer<BasicV, BasicTE, BasicP, BasicCE>| -> () {
 				last_frame_duration = Instant::now().duration_since(frame_start_time);
 				frame_start_time = Instant::now();
+
 				let t : f32 = Instant::now().duration_since(start_time).as_secs_f32();
-
-				let pos : Vec3 = Vec3::new(0.0, 0.0, 3.0);
-				let t_x : f32 = t; //0.0;
-				let t_y : f32 = t; //std::f32::consts::PI;
-				let t_z : f32 = t; //0.0;
-				let scale : f32 = 1.0;
-
-				r.meshes[0].model_mat = Mat4::from_translation(pos)
-					* Mat4::from_rotation_x(t_x)
-					* Mat4::from_rotation_y(t_y)
-					* Mat4::from_rotation_z(t_z)
-					* Mat4::from_scale(Vec3::splat(scale));
+				r.meshes[0].model_mat =
+					Mat4::from_translation(Vec3::new(0.0, -0.0, 5.0))
+				//		* Mat4::from_rotation_x(t)
+				//		* Mat4::from_rotation_y(t)
+				//		* Mat4::from_rotation_z(t);
+				// * Mat4::from_scale(Vec3::splat(4_f32))
 			},
 		)),
 	);
