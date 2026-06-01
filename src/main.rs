@@ -5,7 +5,7 @@ mod window_render_target;
 
 use std::time::{Duration, Instant};
 
-use glam::{Mat4, Vec3};
+use glam::{Mat4, Vec3, Vec4};
 
 use crate::mesh::{BasicCE, BasicP, BasicTE, BasicV, Mesh};
 use crate::renderer::{Renderer, RendererSettings};
@@ -20,8 +20,8 @@ fn main() -> Result<(), ()> {
 
 	let mut renderer : Renderer<BasicV, BasicTE, BasicP, BasicCE> = Renderer::new(
 		RendererSettings::default(),
-		vec![Mesh::<BasicV, BasicTE, BasicP, BasicCE>::default()],
-		//vec![Mesh::<BasicV, BasicTE, BasicP, BasicCE>::unit_cube()],
+		//vec![Mesh::<BasicV, BasicTE, BasicP, BasicCE>::default()],
+		vec![Mesh::<BasicV, BasicTE, BasicP, BasicCE>::unit_cube()],
 		Some(Box::new(
 			move |r : &mut Renderer<BasicV, BasicTE, BasicP, BasicCE>| -> () {
 				last_frame_duration = Instant::now().duration_since(frame_start_time);
@@ -32,7 +32,7 @@ fn main() -> Result<(), ()> {
 				let t_x : f32 = t; //0.0;
 				let t_y : f32 = t; //std::f32::consts::PI;
 				let t_z : f32 = t; //0.0;
-				let scale : f32 = 1.0;
+				let scale : f32 = 2.0 * f32::sin(t * 0.5);
 
 				r.meshes[0].model_mat = Mat4::from_translation(pos)
 					* Mat4::from_rotation_x(t_x)

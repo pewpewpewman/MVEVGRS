@@ -379,10 +379,29 @@ where
 						let fina_x : i32 = self.ndx_to_screen_x(fina_x);
 
 						(init_x..=fina_x).for_each(|x_screen : i32| -> () {
+							//PER PIXEL OPERATIONS HERE
+							let x_ndc : f32 = self.screen_x_to_ndx(x_screen);
+
 							let fb_idx : usize =
 								(y_screen * (self.width() as i32) + x_screen) as usize;
 
-							let fill_col : Vec4 = Vec4::new(0.85, 0.5, 0.7, 1.0);
+							let mut bary_v : Vec3 = bary_mat * Vec3::new(x_ndc, y_ndc, 1_f32);
+							bary_v /= bary_v.element_sum();
+							let [a, b, c] : [f32; 3] = bary_v.to_array();
+
+							let z : f32 = trans_out[0].pos.z * a
+								+ trans_out[1].pos.z * b
+								+ trans_out[2].pos.z * c;
+
+							if z > self.depth_buffer[fb_idx] {
+								return;
+							}
+
+							let p : P = trans_out[0].colorer_in * a
+								+ trans_out[1].colorer_in * b
+								+ trans_out[2].colorer_in * c;
+
+							let fill_col : Pixel = pixel_colorer(&p, &colorer_env, self);
 
 							let fill_col : Vec4 =
 								if self.renderer_settings.show_tri_div && j == 0 {
@@ -393,40 +412,34 @@ where
 
 							//Array access of doom
 							self.frame_buffer[fb_idx] = fill_col;
-
-							//if x_screen == init_x {
-							//	self.frame_buffer[fb_idx] = Vec4::ONE;
-							//}
-							//if x_screen == fina_x {
-							//	self.frame_buffer[fb_idx] = Vec4::ZERO;
-							//}
+							self.depth_buffer[fb_idx] = z;
 						});
 					});
 				});
 
 				//MARK VERTICES ON TRIANGLE IN COLORS
-				y_sorted.into_iter().enumerate().for_each(
-					|(i, v) : (usize, Vec2)| -> () {
-						let y : i32 = self.ndy_to_screen_y(v.y);
-						let x : i32 = self.ndx_to_screen_x(v.x);
-						(-2..=2).for_each(|x_offset : i32| -> () {
-							(-2..=2).for_each(|y_offset : i32| -> () {
-								let y : i32 =
-									i32::clamp(y + y_offset, 0, self.height() as i32 - 1);
-								let x : i32 =
-									i32::clamp(x + x_offset, 0, self.width() as i32 - 1);
+				//y_sorted.into_iter().enumerate().for_each(
+				//	|(i, v) : (usize, Vec2)| -> () {
+				//		let y : i32 = self.ndy_to_screen_y(v.y);
+				//		let x : i32 = self.ndx_to_screen_x(v.x);
+				//		(-2..=2).for_each(|x_offset : i32| -> () {
+				//			(-2..=2).for_each(|y_offset : i32| -> () {
+				//				let y : i32 =
+				//					i32::clamp(y + y_offset, 0, self.height() as i32 - 1);
+				//				let x : i32 =
+				//					i32::clamp(x + x_offset, 0, self.width() as i32 - 1);
 
-								let fb_idx : usize = ((y * self.width() as i32) + x) as usize;
+				//				let fb_idx : usize = ((y * self.width() as i32) + x) as usize;
 
-								self.frame_buffer[fb_idx] = [
-									Vec4::new(1.0, 0.0, 0.0, 1.0),
-									Vec4::new(0.0, 1.0, 0.0, 1.0),
-									Vec4::new(0.0, 0.0, 1.0, 1.0),
-								][i % 3];
-							});
-						});
-					},
-				);
+				//				self.frame_buffer[fb_idx] = [
+				//					Vec4::new(1.0, 0.0, 0.0, 1.0),
+				//					Vec4::new(0.0, 1.0, 0.0, 1.0),
+				//					Vec4::new(0.0, 0.0, 1.0, 1.0),
+				//				][i % 3];
+				//			});
+				//		});
+				//	},
+				//);
 				//END OF COLORED  DEBUG VERTS
 			});
 	}
