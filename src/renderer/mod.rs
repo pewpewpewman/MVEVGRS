@@ -1,117 +1,134 @@
 // Module that handles the main loop of
 // drawing and rendering.
 
-mod camera;
+pub mod camera;
+pub mod user_stage;
 
 use std::cmp::Ordering;
 use std::ops::{Add, BitAnd, BitOr, Div, Mul};
 
 use camera::Camera;
 use glam::{IVec2, Mat3, Mat4, Vec2, Vec3, Vec3Swizzles, Vec4, Vec4Swizzles};
-
-use crate::mesh::{
-	Mesh,
+use user_stage::{
+	ColorContext,
 	PixelColorer,
-	Triangle,
+	VertContext,
 	VertTransOut,
 	VertexTransformer,
 };
-use crate::pixel::Pixel;
 
-type UpdateFunc<V, TE, P, CE> =
-	Box<dyn FnMut(&mut Renderer<V, TE, P, CE>) -> ()>;
+use crate::mesh::{Mesh, Tri};
 
-//The main renderer. For information on what these type generics do, please refer to
-//./src/mesh/mod.rs
-pub struct Renderer<V, TE, P, CE> {
-	// Main frame buffer that is written to
-	pub frame_buffer : Vec<Pixel>,
-	// Depth buffer that is used for knowing what tris are visible
+type UpdateFunc<V, P, UE> = Box<dyn FnMut(&mut Renderer<V, P, UE>) -> ()>;
+
+//The renderer, draws content to a frame buffer. For info on what these type
+//generics are, please refer to ./src/renderer/user_stage/mod.rs
+pub struct Renderer<V, P, UE> {
+	//Main frame buffer that is written to
+	pub frame_buffer : Vec<Vec4>,
+	//Depth buffer that is used for knowing what tris are visible
 	pub depth_buffer : Vec<f32>,
-	// Settings for how to draw things
-	pub renderer_settings : RendererSettings,
-	// Camera that holds the camera and projection matrix
+	// INTERNAL render width and height - may or may not match up with what the target for
+	// rendering is
+	pub width : u32,
+	pub height : u32,
+	// Go to value for filling the frame buffer
+	pub background_col : Vec4,
+	// Triangles are drawn in 2 phases, set this to true if you want the second phase to have
+	// inverted colors
+	pub show_tri_div : bool,
+	//Camera that holds the camera and projection matrix
 	pub camera : Camera,
-	// Triangles to be rastered
-	pub meshes : Vec<Mesh<V, TE, P, CE>>,
-	// Update function to run before drawing each frame
-	update_fn : Option<UpdateFunc<V, TE, P, CE>>,
+	//Triangles to be rastered
+	pub meshes : Vec<Mesh<V>>,
+	//Update function to run before drawing each frame
+	pub update_fn : Option<UpdateFunc<V, P, UE>>,
+	//Vertex transformer
+	pub vertex_transformer : VertexTransformer<V, P, UE>,
+	//Pixel colorer
+	pub pixel_colorer : PixelColorer<P, UE>,
+	//User function enviorment
+	pub user_func_env : UE,
 }
 
-impl<V, TE, P, CE> Renderer<V, TE, P, CE>
+impl<V, P, UE> Renderer<V, P, UE>
 where
-	V : Clone + Copy,
-	TE : Clone,
-	P : Clone + Copy + Mul<f32, Output = P> + Add<Output = P>,
-	CE : Clone,
+	V : Copy,
+	P : Copy + Mul<f32, Output = P> + Add<Output = P>,
+	UE : Copy,
 {
 	pub fn new(
-		renderer_settings : RendererSettings,
-		meshes : Vec<Mesh<V, TE, P, CE>>,
-		update_fn : Option<Box<dyn FnMut(&mut Renderer<V, TE, P, CE>) -> ()>>,
-	) -> Renderer<V, TE, P, CE> {
-		let pix_area : usize =
-			(renderer_settings.width * renderer_settings.height) as usize;
+		width : u32,
+		height : u32,
+		vertex_transformer : VertexTransformer<V, P, UE>,
+		pixel_colorer : PixelColorer<P, UE>,
+		user_func_env : UE,
+		meshes : Vec<Mesh<V>>,
+		update_fn : Option<Box<dyn FnMut(&mut Renderer<V, P, UE>) -> ()>>,
+	) -> Renderer<V, P, UE> {
+		let pix_area : usize = (width * height) as usize;
 
 		Renderer {
-			frame_buffer : vec![renderer_settings.background_col; pix_area],
-			depth_buffer : vec![f32::MAX; pix_area],
-			renderer_settings,
-			camera : Camera::default(),
+			width,
+			height,
+			vertex_transformer,
+			pixel_colorer,
+			user_func_env,
 			meshes,
 			update_fn,
+			background_col : Vec4::new(0.5, 0.3, 0.7, 1.0),
+			show_tri_div : false,
+			frame_buffer : vec![Vec4::default(); pix_area],
+			depth_buffer : vec![f32::default(); pix_area],
+			camera : Camera::default(),
 		}
 	}
 
-	pub fn width(self: &Renderer<V, TE, P, CE>) -> u32 {
-		self.renderer_settings.width
-	}
+	pub fn width(self: &Renderer<V, P, UE>) -> u32 { self.width }
 
-	pub fn height(self: &Renderer<V, TE, P, CE>) -> u32 {
-		self.renderer_settings.height
-	}
+	pub fn height(self: &Renderer<V, P, UE>) -> u32 { self.height }
 
 	// Helpful conversion functions between
 	// NDC and pixel coordinates and vice
-	// versa
+	// versa - screen coords are zero indexed
 	pub fn screen_x_to_ndx(
-		self: &Renderer<V, TE, P, CE>,
+		self: &Renderer<V, P, UE>,
 		x : i32,
 	) -> f32 {
-		x as f32 / self.width() as f32 * 2_f32 - 1_f32
+		x as f32 / self.width as f32 * 2_f32 - 1_f32
 	}
 
 	pub fn screen_y_to_ndy(
-		self: &Renderer<V, TE, P, CE>,
+		self: &Renderer<V, P, UE>,
 		y : i32,
 	) -> f32 {
-		(1_f32 - (y as f32 / self.height() as f32)) * 2_f32 - 1_f32
+		(1_f32 - (y as f32 / self.height as f32)) * 2_f32 - 1_f32
 	}
 
 	pub fn screen_coords_to_ndc(
-		self: &Renderer<V, TE, P, CE>,
+		self: &Renderer<V, P, UE>,
 		c : IVec2,
 	) -> Vec3 {
 		Vec3::new(self.screen_x_to_ndx(c.x), self.screen_y_to_ndy(c.y), 0_f32)
 	}
 
 	pub fn ndx_to_screen_x(
-		self: &Renderer<V, TE, P, CE>,
+		self: &Renderer<V, P, UE>,
 		x : f32,
 	) -> i32 {
-		f32::round((self.width() - 1) as f32 * ((1_f32 + x) / 2_f32)) as i32
+		f32::round((self.width - 1) as f32 * ((1_f32 + x) / 2_f32)) as i32
 	}
 
 	pub fn ndy_to_screen_y(
-		self: &Renderer<V, TE, P, CE>,
+		self: &Renderer<V, P, UE>,
 		y : f32,
 	) -> i32 {
-		f32::round((self.height() - 1) as f32 * (1_f32 - ((1_f32 + y) / 2_f32)))
+		f32::round((self.height - 1) as f32 * (1_f32 - ((1_f32 + y) / 2_f32)))
 			as i32
 	}
 
 	pub fn ndc_to_screen_c(
-		self: &Renderer<V, TE, P, CE>,
+		self: &Renderer<V, P, UE>,
 		p : Vec2,
 	) -> IVec2 {
 		IVec2::new(self.ndx_to_screen_x(p.x), self.ndy_to_screen_y(p.y))
@@ -181,17 +198,13 @@ where
 	// Draw a single triangle to the
 	// frame_buffer
 	fn raster_tri(
-		self: &mut Renderer<V, TE, P, CE>,
-		tri : &Triangle<V>,
-		vertex_transformer : VertexTransformer<V, TE, P, CE>,
-		transformer_env : &TE,
-		pixel_colorer : PixelColorer<V, TE, P, CE>,
-		colorer_env : &CE,
+		self: &mut Renderer<V, P, UE>,
+		tri : &Tri<V>,
 	) -> () {
 		//Vertex information from the vertex transformer
 		let trans_out : [VertTransOut<P>; 3] =
 			tri.0.map(|v : V| -> VertTransOut<P> {
-				vertex_transformer(&v, transformer_env, self)
+				(self.vertex_transformer)(&v, &self.user_func_env, &VertContext {})
 			});
 
 		let mut poly_points : Vec<Vec4> = trans_out.iter().fold(
@@ -383,7 +396,7 @@ where
 							let x_ndc : f32 = self.screen_x_to_ndx(x_screen);
 
 							let fb_idx : usize =
-								(y_screen * (self.width() as i32) + x_screen) as usize;
+								(y_screen * (self.width as i32) + x_screen) as usize;
 
 							let mut bary_v : Vec3 = bary_mat * Vec3::new(x_ndc, y_ndc, 1_f32);
 							bary_v /= bary_v.element_sum();
@@ -397,18 +410,18 @@ where
 								return;
 							}
 
-							let p : P = trans_out[0].colorer_in * a
-								+ trans_out[1].colorer_in * b
-								+ trans_out[2].colorer_in * c;
-
-							let fill_col : Pixel = pixel_colorer(&p, &colorer_env, self);
+							let p : P = trans_out[0].colorer_data * a
+								+ trans_out[1].colorer_data * b
+								+ trans_out[2].colorer_data * c;
 
 							let fill_col : Vec4 =
-								if self.renderer_settings.show_tri_div && j == 0 {
-									fill_col
-								} else {
-									Vec4::ONE - fill_col
-								};
+								(self.pixel_colorer)(&p, &self.user_func_env, &ColorContext {});
+
+							let fill_col : Vec4 = if self.show_tri_div && j == 0 {
+								fill_col
+							} else {
+								Vec4::ONE - fill_col
+							};
 
 							//Array access of doom
 							self.frame_buffer[fb_idx] = fill_col;
@@ -425,11 +438,11 @@ where
 				//		(-2..=2).for_each(|x_offset : i32| -> () {
 				//			(-2..=2).for_each(|y_offset : i32| -> () {
 				//				let y : i32 =
-				//					i32::clamp(y + y_offset, 0, self.height() as i32 - 1);
+				//					i32::clamp(y + y_offset, 0, self.height as i32 - 1);
 				//				let x : i32 =
-				//					i32::clamp(x + x_offset, 0, self.width() as i32 - 1);
+				//					i32::clamp(x + x_offset, 0, self.width as i32 - 1);
 
-				//				let fb_idx : usize = ((y * self.width() as i32) + x) as usize;
+				//				let fb_idx : usize = ((y * self.width as i32) + x) as usize;
 
 				//				self.frame_buffer[fb_idx] = [
 				//					Vec4::new(1.0, 0.0, 0.0, 1.0),
@@ -444,11 +457,9 @@ where
 			});
 	}
 
-	pub fn draw(self: &mut Renderer<V, TE, P, CE>) -> () {
+	pub fn draw(self: &mut Renderer<V, P, UE>) -> () {
 		// Raster all triangles
-		self
-			.frame_buffer
-			.fill(self.renderer_settings.background_col);
+		self.frame_buffer.fill(self.background_col);
 
 		self.depth_buffer.fill(f32::MAX);
 
@@ -458,57 +469,24 @@ where
 			.meshes
 			.clone()
 			.into_iter()
-			.for_each(|m : Mesh<V, TE, P, CE>| -> () {
-				let trans_env : TE = (m.trans_env_updater)(&m, self);
-
-				let color_env : CE = (m.color_env_updater)(&m, self);
-
-				m.tris.iter().for_each(|t : &Triangle<V>| -> () {
-					self.raster_tri(
-						&t,
-						m.vertex_transformer,
-						&trans_env,
-						m.pixel_colorer,
-						&color_env,
-					);
+			.for_each(|m : Mesh<V>| -> () {
+				m.tris.iter().for_each(|t : &Tri<V>| -> () {
+					self.raster_tri(&t);
 				});
 			});
 	}
 
-	pub fn frame_step(self: &mut Renderer<V, TE, P, CE>) -> () {
+	pub fn frame_step(self: &mut Renderer<V, P, UE>) -> () {
 		//Calling a function that acts on its own struct causes
 		//some borrow checker problems, let's do some shenanigans
 		//to please it.
-		let mut temp : Option<UpdateFunc<V, TE, P, CE>> = self.update_fn.take();
+		let mut temp : Option<UpdateFunc<V, P, UE>> = self.update_fn.take();
 		if let Some(f) = &mut temp {
-			let f : &mut UpdateFunc<V, TE, P, CE> = f;
+			let f : &mut UpdateFunc<V, P, UE> = f;
 			(f)(self);
 		}
 		self.update_fn = temp;
 
 		self.draw();
-	}
-}
-
-pub struct RendererSettings {
-	// INTERNAL render width and height - may or may not match up with what the target for
-	// rendering is
-	pub width : u32,
-	pub height : u32,
-	// Go to value for filling the frame buffer
-	pub background_col : Pixel,
-	// Triangles are drawn in 2 phases, set this to true if you want the second phase to have
-	// inverted colors
-	pub show_tri_div : bool,
-}
-
-impl Default for RendererSettings {
-	fn default() -> RendererSettings {
-		RendererSettings {
-			width : 320 * 2,
-			height : 240 * 2,
-			background_col : Pixel::new(0.7, 0.6, 0.9, 0.5),
-			show_tri_div : false,
-		}
 	}
 }

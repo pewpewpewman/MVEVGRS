@@ -3,7 +3,7 @@ use std::num::NonZeroU32;
 use std::ops::{Add, Mul};
 use std::rc::Rc;
 
-use glam::{Mat4, Vec3};
+use glam::{Mat4, Vec3, Vec4};
 use softbuffer::{Buffer, Context, Surface};
 use winit::application::ApplicationHandler;
 use winit::dpi::{PhysicalSize, Size};
@@ -18,7 +18,6 @@ use winit::event_loop::{
 use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::{Fullscreen, Icon, Window, WindowAttributes, WindowId};
 
-use crate::pixel::Pixel;
 use crate::renderer::Renderer;
 
 struct WindowState {
@@ -38,8 +37,8 @@ impl WindowState {
 	}
 }
 
-pub struct WindowRenderTarget<'a, V, TE, P, CE> {
-	source : &'a mut Renderer<V, TE, P, CE>,
+pub struct WindowRenderTarget<'a, V, P, UE> {
+	source : &'a mut Renderer<V, P, UE>,
 	//Internal windowing systems need to be inited by winit's application handler callback, so it
 	//must be behind an option
 	window_state : Option<WindowState>,
@@ -47,21 +46,20 @@ pub struct WindowRenderTarget<'a, V, TE, P, CE> {
 	keyboard_state : HashSet<KeyCode>,
 }
 
-impl<'a, V, TE, P, CE> WindowRenderTarget<'a, V, TE, P, CE>
+impl<'a, V, P, UE> WindowRenderTarget<'a, V, P, UE>
 where
 	V : Clone + Copy,
-	TE : Clone,
 	P : Clone + Copy + Mul<f32, Output = P> + Add<Output = P>,
-	CE : Clone,
+	UE : Copy,
 {
 	pub fn new(
-		source : &'a mut Renderer<V, TE, P, CE>
-	) -> Result<WindowRenderTarget<'a, V, TE, P, CE>, String> {
+		source : &'a mut Renderer<V, P, UE>
+	) -> Result<WindowRenderTarget<'a, V, P, UE>, String> {
 		let event_loop : EventLoop<()> = EventLoop::new().unwrap();
 
 		event_loop.set_control_flow(ControlFlow::Poll);
 
-		let mut ret : WindowRenderTarget<'a, V, TE, P, CE> = WindowRenderTarget {
+		let mut ret : WindowRenderTarget<'a, V, P, UE> = WindowRenderTarget {
 			source,
 			window_state : None,
 			keyboard_state : HashSet::new(),
@@ -75,16 +73,14 @@ where
 	}
 }
 
-impl<'a, V, TE, P, CE> ApplicationHandler
-	for WindowRenderTarget<'a, V, TE, P, CE>
+impl<'a, V, P, UE> ApplicationHandler for WindowRenderTarget<'a, V, P, UE>
 where
 	V : Clone + Copy,
-	TE : Clone,
 	P : Clone + Copy + Mul<f32, Output = P> + Add<Output = P>,
-	CE : Clone,
+	UE : Copy,
 {
 	fn resumed(
-		self: &mut WindowRenderTarget<'a, V, TE, P, CE>,
+		self: &mut WindowRenderTarget<'a, V, P, UE>,
 		event_loop : &ActiveEventLoop,
 	) -> () {
 		//Initialize the windowstate now that we have the event loop do the window creating
@@ -93,8 +89,8 @@ where
 				.create_window(
 					WindowAttributes::default()
 						.with_inner_size(Size::Physical(PhysicalSize::new(
-							self.source.width(),
-							self.source.height(),
+							self.source.width,
+							self.source.height,
 						)))
 						.with_title(String::from("MVEVGRS BIATCH!!"))
 						.with_window_icon(Some({
@@ -135,7 +131,7 @@ where
 	}
 
 	fn window_event(
-		self: &mut WindowRenderTarget<'a, V, TE, P, CE>,
+		self: &mut WindowRenderTarget<'a, V, P, UE>,
 		event_loop : &ActiveEventLoop,
 		_id : WindowId,
 		event : WindowEvent,
@@ -200,9 +196,9 @@ where
 					.expect("Window should be inited by first draw request")
 					.surface
 					.resize(
-						NonZeroU32::new(self.source.width())
+						NonZeroU32::new(self.source.width)
 							.expect("Width should be non-zero"),
-						NonZeroU32::new(self.source.height())
+						NonZeroU32::new(self.source.height)
 							.expect("Height should be non-zero"),
 					)
 					.expect("Surface should be resizable");
@@ -218,7 +214,7 @@ where
 				buffer
 					.iter_mut()
 					.zip(self.source.frame_buffer.iter())
-					.for_each(|(u, p) : (&mut u32, &Pixel)| -> () {
+					.for_each(|(u, p) : (&mut u32, &Vec4)| -> () {
 						*u = ((p.x * u8::MAX as f32).round() as u32) << 16
 							| ((p.y * u8::MAX as f32).round() as u32) << 8
 							| ((p.z * u8::MAX as f32).round() as u32);
