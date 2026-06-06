@@ -36,10 +36,10 @@ fn main() -> Result<(), ()> {
 								res += Vec3::new(0.0, 0.0, 1.0);
 							}
 							if i & 2 != 0 {
-								res += Vec3::new(0.0, 1.0, 0.0);
+								res += Vec3::new(1.0, 0.0, 0.0);
 							}
 							if i & 4 != 0 {
-								res += Vec3::new(1.0, 0.0, 0.0);
+								res += Vec3::new(0.0, 1.0, 0.0);
 							}
 							res
 						},
@@ -59,9 +59,9 @@ fn main() -> Result<(), ()> {
 				dbg!(1.0 / last_frame_duration.as_secs_f32());
 
 				let pos : Vec3 = Vec3::new(0.0, 0.0, 3.0);
-				let t_x : f32 = t;
-				let t_y : f32 = t;
-				let t_z : f32 = t;
+				let t_x : f32 = 0.0;
+				let t_y : f32 = 0.0;
+				let t_z : f32 = 0.0;
 				let scale : f32 = 1.0;
 
 				r.meshes[0].model_mat = Mat4::from_translation(pos)

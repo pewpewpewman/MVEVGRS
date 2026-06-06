@@ -1,19 +1,17 @@
+pub mod obj_file;
+
 use std::ops::{Add, Mul};
 
 use glam::{Mat4, Vec3, Vec4};
 
 use crate::renderer::Renderer;
 
-//TODO: add enum that allows giving mesh simple list of points instead of list of triangles
+//TODO: add enum to support indexed rendering
 
-//A mesh of triangles that have other data. The "V" type is the triangle's vertex data
-//(probably contains a vec3 position. The "TE" type is the vertex transformer enviorment (probably
-//contains projection-camera-model matrix). The "P" type is the pixel coloring data produced by the
-//vertex transform that gets interpolated across the triangle. The "CE" type is the pixel colorer enviorment.
-//Like the "TE" type, it's just information that's computed once per mesh draw and is then available to the
-//vertex transform and pixel coloring functions.
+//For information on the V type generic, please
+//refer to ./src/renderer/user_stage/mod.rs
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Mesh<V> {
 	//Mesh data that's drawn,
 	pub tris : Vec<Tri<V>>,
@@ -145,7 +143,7 @@ impl Default for Mesh<Vec3> {
 	fn default() -> Mesh<Vec3> { Mesh::new(vec![Tri::default()], Mat4::IDENTITY) }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct Tri<V>(pub [V; 3]);
 
 impl<V> Tri<V> {
@@ -156,13 +154,11 @@ impl<V> Tri<V> {
 	) -> Tri<V> {
 		Tri([v1, v2, v3])
 	}
-}
 
-// Creates an equilateral triangle
-// centered on the origin with side
-// lengths of 1.
-impl Default for Tri<Vec3> {
-	fn default() -> Tri<Vec3> {
+	// Creates an equilateral triangle
+	// centered on the origin with side
+	// lengths of 1.
+	pub fn equalat_tri() -> Tri<Vec3> {
 		Tri::<Vec3>::new(
 			Vec3::new(-0.0_f32, 0_f32, 0.433012701892),
 			Vec3::new(-0.5_f32, 0_f32, -0.433012701892),

@@ -50,7 +50,6 @@ impl<'a, V, P, UE> WindowRenderTarget<'a, V, P, UE>
 where
 	V : Clone + Copy,
 	P : Clone + Copy + Mul<f32, Output = P> + Add<Output = P>,
-	UE : Copy,
 {
 	pub fn new(
 		source : &'a mut Renderer<V, P, UE>
@@ -77,7 +76,6 @@ impl<'a, V, P, UE> ApplicationHandler for WindowRenderTarget<'a, V, P, UE>
 where
 	V : Clone + Copy,
 	P : Clone + Copy + Mul<f32, Output = P> + Add<Output = P>,
-	UE : Copy,
 {
 	fn resumed(
 		self: &mut WindowRenderTarget<'a, V, P, UE>,
@@ -143,7 +141,7 @@ where
 				let mut camera_horiz_angle_change : f32 = 0_f32;
 				let mut camera_vert_angle_change : f32 = 0_f32;
 
-				let movement_amount : f32 = 0.01;
+				let movement_amount : f32 = 0.05;
 
 				self.keyboard_state.iter().for_each(|kc : &KeyCode| -> () {
 					match kc {

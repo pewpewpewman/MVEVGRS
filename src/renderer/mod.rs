@@ -55,7 +55,6 @@ impl<V, P, UE> Renderer<V, P, UE>
 where
 	V : Copy,
 	P : Copy + Mul<f32, Output = P> + Add<Output = P>,
-	UE : Copy,
 {
 	pub fn new(
 		width : u32,
@@ -123,8 +122,7 @@ where
 		self: &Renderer<V, P, UE>,
 		y : f32,
 	) -> i32 {
-		f32::round((self.height - 1) as f32 * (1_f32 - ((1_f32 + y) / 2_f32)))
-			as i32
+		((self.height - 1) as f32 * (1_f32 - ((1_f32 + y) / 2_f32))) as i32
 	}
 
 	pub fn ndc_to_screen_c(
@@ -342,8 +340,10 @@ where
 				y_sorted
 					.sort_by(|a : &Vec2, b : &Vec2| -> Ordering { b.y.total_cmp(&a.y) });
 
-				let y_sorted_screen : [i32; 3] =
+				let mut y_sorted_screen : [i32; 3] =
 					y_sorted.map(|v : Vec2| -> i32 { self.ndy_to_screen_y(v.y) });
+
+				y_sorted_screen[1] += 1;
 
 				//Iterate over the triangle in two segments
 				(0..=1_usize).for_each(|j : usize| -> () {
@@ -397,6 +397,10 @@ where
 
 							let fb_idx : usize =
 								(y_screen * (self.width as i32) + x_screen) as usize;
+
+							if fb_idx >= self.frame_buffer.len() {
+								dbg!(x_ndc, y_ndc, fb_idx);
+							}
 
 							let mut bary_v : Vec3 = bary_mat * Vec3::new(x_ndc, y_ndc, 1_f32);
 							bary_v /= bary_v.element_sum();
