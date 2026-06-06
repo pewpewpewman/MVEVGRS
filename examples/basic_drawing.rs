@@ -1,5 +1,5 @@
 use std::ops::{Add, Mul};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use glam::{Mat4, Vec3, Vec4};
 use mvevgrs::mesh::{Mesh, Tri};
@@ -8,12 +8,6 @@ use mvevgrs::renderer::Renderer;
 use mvevgrs::window_render_target::WindowRenderTarget;
 
 fn main() -> Result<(), ()> {
-	let start_time : Instant = Instant::now();
-
-	let mut frame_start_time : Instant = Instant::now();
-
-	let mut _last_frame_duration : Duration = Duration::from_secs(0);
-
 	let mut renderer : Renderer<BasicV, BasicP, BasicUE> = Renderer::new(
 		640,
 		480,
@@ -53,16 +47,14 @@ fn main() -> Result<(), ()> {
 		)],
 		Some(Box::new(
 			move |r : &mut Renderer<BasicV, BasicP, BasicUE>| -> () {
-				_last_frame_duration = Instant::now().duration_since(frame_start_time);
-				frame_start_time = Instant::now();
-				let _t : f32 = Instant::now().duration_since(start_time).as_secs_f32();
-				//Uncomment to see frame rate
-				//dbg!(1.0 / last_frame_duration.as_secs_f32());
+				let t : f32 = Instant::now()
+					.duration_since(r.renderer_start_time)
+					.as_secs_f32();
 
-				let pos : Vec3 = Vec3::new(0.0, 0.0, 3.0);
-				let t_x : f32 = 0.0;
-				let t_y : f32 = 0.0;
-				let t_z : f32 = 0.0;
+				let pos : Vec3 = Vec3::new(t.sin(), t.cos(), 3.0);
+				let t_x : f32 = t;
+				let t_y : f32 = t;
+				let t_z : f32 = t;
 				let scale : f32 = 1.0;
 
 				r.meshes[0].model_mat = Mat4::from_translation(pos)

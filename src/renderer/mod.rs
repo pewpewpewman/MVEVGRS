@@ -6,6 +6,7 @@ pub mod user_stage;
 
 use std::cmp::Ordering;
 use std::ops::{Add, BitOr, Div, Mul};
+use std::time::{Duration, Instant};
 
 use camera::Camera;
 use glam::{IVec2, Mat3, Mat4, Vec2, Vec3, Vec4, Vec4Swizzles};
@@ -24,23 +25,17 @@ type UpdateFunc<V, P, UE> = Box<dyn FnMut(&mut Renderer<V, P, UE>) -> ()>;
 //The renderer, draws content to a frame buffer. For info on what these type
 //generics are, please refer to ./src/renderer/user_stage/mod.rs
 pub struct Renderer<V, P, UE> {
+	//** MAIN RENDERING INFO **//
 	//Main frame buffer that is written to
 	pub frame_buffer : Vec<Vec4>,
 	//Depth buffer that is used for knowing what tris are visible
 	pub depth_buffer : Vec<f32>,
-	// INTERNAL render width and height - may or may not match up with what the target for
-	// rendering is
-	pub width : u32,
-	pub height : u32,
-	// Go to value for filling the frame buffer
-	pub background_col : Vec4,
-	// Triangles are drawn in 2 phases, set this to true if you want the second phase to have
-	// inverted colors
-	pub show_tri_div : bool,
 	//Camera that holds the camera and projection matrix
 	pub camera : Camera,
-	//Triangles to be rastered
+	//Meshes to be rastered
 	pub meshes : Vec<Mesh<V>>,
+
+	//** USER STAGE INFO **//
 	//Update function to run before drawing each frame
 	pub update_fn : Option<UpdateFunc<V, P, UE>>,
 	//Vertex transformer
@@ -49,6 +44,24 @@ pub struct Renderer<V, P, UE> {
 	pub pixel_colorer : PixelColorer<P, UE>,
 	//User function enviorment
 	pub user_func_env : UE,
+
+	//** RENDERING "SETTINGS" **//
+	// INTERNAL render width and height - may or may
+	// not match up with what the target for rendering is
+	pub width : u32,
+	pub height : u32,
+	// Go to value for filling the frame buffer
+	pub background_col : Vec4,
+	// Triangles are drawn in 2 phases, set this
+	// to true if you want the second phase to have
+	// inverted colors
+	pub show_tri_div : bool,
+
+	//** TIME INFO **//
+	pub renderer_start_time : Instant,
+	pub prev_frame_duration : Duration,
+	pub curr_frame_start_time : Instant,
+	pub frame_num : u64,
 }
 
 impl<V, P, UE> Renderer<V, P, UE>
@@ -80,6 +93,10 @@ where
 			frame_buffer : vec![Vec4::default(); pix_area],
 			depth_buffer : vec![f32::default(); pix_area],
 			camera : Camera::default(),
+			renderer_start_time : Instant::now(),
+			prev_frame_duration : Duration::ZERO,
+			curr_frame_start_time : Instant::now(),
+			frame_num : 0,
 		}
 	}
 
@@ -167,28 +184,17 @@ where
 		//
 		//The bastards at UCR denied me in 2024 - it pains me so
 		//deeply to go to them in my hour of need
-		//
-		//The near  plane poses a problem as z_clip is set to
-		//be [0, 1] because of the perspective matrix we chose
-		//to use so that case uses a modified formula for alpha
-		let alpha : f32 = if bit_idx != 4 {
-			(sign * point_2.w - point_2[axis])
-				/ (point_1[axis] - sign * point_1.w + sign * point_2.w - point_2[axis])
-		} else {
-			-point_2.z / (point_1.z - point_2.z)
-		};
+
+		let alpha : f32 = (sign * point_2.w - point_2[axis])
+			/ (point_1[axis] - sign * point_1.w + sign * point_2.w - point_2[axis]);
 
 		let mut new_point : Vec4 = alpha * point_1 + (1.0 - alpha) * point_2;
 
 		//This sucks but without this we get rounding errors that
 		//cause an infinite loop where alpha = 1 so no real progress
 		//is made
-		if bit_idx != 4 {
-			new_point[axis] =
-				new_point[axis].clamp(-new_point.w.abs(), new_point.w.abs());
-		} else {
-			new_point[axis] = new_point[axis].clamp(0.0, new_point.w);
-		}
+		new_point[axis] =
+			new_point[axis].clamp(-new_point.w.abs(), new_point.w.abs());
 
 		new_point
 	}
@@ -253,6 +259,7 @@ where
 				.for_each(|j : usize| -> () {
 					let prev_idx : usize =
 						((j as isize - 1).rem_euclid(input_points.len() as isize)) as usize;
+
 					let curr_point : Vec4 = input_points[j];
 					let curr_code : u8 = input_codes[j];
 					let prev_point : Vec4 = input_points[prev_idx];
@@ -481,6 +488,11 @@ where
 	}
 
 	pub fn frame_step(self: &mut Renderer<V, P, UE>) -> () {
+		self.prev_frame_duration =
+			Instant::now().duration_since(self.curr_frame_start_time);
+		self.curr_frame_start_time = Instant::now();
+		self.frame_num += 1;
+
 		//Calling a function that acts on its own struct causes
 		//some borrow checker problems, let's do some shenanigans
 		//to please it.

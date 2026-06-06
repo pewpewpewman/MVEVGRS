@@ -141,7 +141,7 @@ where
 				let mut camera_horiz_angle_change : f32 = 0_f32;
 				let mut camera_vert_angle_change : f32 = 0_f32;
 
-				let movement_amount : f32 = 0.03;
+				let movement_amount : f32 = 5.0;
 
 				self.keyboard_state.iter().for_each(|kc : &KeyCode| -> () {
 					match kc {
@@ -178,8 +178,9 @@ where
 					}
 				});
 
-				self.source.camera.camera_mat *=
-					Mat4::from_translation(camera_pos_change);
+				self.source.camera.camera_mat *= Mat4::from_translation(
+					camera_pos_change * self.source.prev_frame_duration.as_secs_f32(),
+				);
 				//* Mat4::from_rotation_y(camera_horiz_angle_change)
 				//* Mat4::from_rotation_x(camera_vert_angle_change);
 

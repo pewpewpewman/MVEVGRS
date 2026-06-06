@@ -13,7 +13,7 @@ pub struct Camera {
 
 impl Default for Camera {
 	fn default() -> Camera {
-		let near_plane : f32 = 0.01_f32;
+		let near_plane : f32 = 0.001_f32;
 		let far_plane : f32 = 1000_f32;
 		Camera {
 			camera_mat : Mat4::IDENTITY,

@@ -1,5 +1,4 @@
 use std::ops::{Add, Mul};
-use std::time::{Duration, Instant};
 
 use glam::{Mat4, Vec2, Vec3, Vec3Swizzles, Vec4};
 use image::{DynamicImage, Pixel};
@@ -48,10 +47,6 @@ fn main() -> Result<(), String> {
 		texture : DynamicImage,
 	}
 
-	let start_time : Instant = Instant::now();
-	let mut frame_start_time : Instant = Instant::now();
-	let mut _last_frame_duration : Duration = Duration::from_secs(0);
-
 	WindowRenderTarget::<ObjV, BasicP, BasicUE>::new(&mut Renderer::<
 		ObjV,
 		BasicP,
@@ -82,7 +77,7 @@ fn main() -> Result<(), String> {
 
 				Vec4::from((col, 1.0))
 			} else {
-				Vec4::new(1.0, 0.5, 0.3, 1.0)
+				Vec4::new(1.0, 1.0, 1.0, 1.0)
 			}
 		},
 		BasicUE {
@@ -93,9 +88,7 @@ fn main() -> Result<(), String> {
 		vec![load_obj_file("models/spot.obj")?],
 		Some(Box::new(
 			move |r : &mut Renderer<ObjV, BasicP, BasicUE>| -> () {
-				_last_frame_duration = Instant::now().duration_since(frame_start_time);
-				frame_start_time = Instant::now();
-				let t : f32 = Instant::now().duration_since(start_time).as_secs_f32();
+				let t : f32 = r.prev_frame_duration.as_secs_f32();
 
 				let pos : Vec3 = Vec3::new(0.0, 0.0, 8.0);
 				let t_x : f32 = 0.0;
