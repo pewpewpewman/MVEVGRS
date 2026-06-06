@@ -1,10 +1,8 @@
 pub mod obj_file;
 
-use std::ops::{Add, Mul};
 
-use glam::{Mat4, Vec3, Vec4};
+use glam::{Mat4, Vec3};
 
-use crate::renderer::Renderer;
 
 //TODO: add enum to support indexed rendering
 

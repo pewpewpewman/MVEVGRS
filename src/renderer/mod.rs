@@ -5,10 +5,10 @@ pub mod camera;
 pub mod user_stage;
 
 use std::cmp::Ordering;
-use std::ops::{Add, BitAnd, BitOr, Div, Mul};
+use std::ops::{Add, BitOr, Div, Mul};
 
 use camera::Camera;
-use glam::{IVec2, Mat3, Mat4, Vec2, Vec3, Vec3Swizzles, Vec4, Vec4Swizzles};
+use glam::{IVec2, Mat3, Mat4, Vec2, Vec3, Vec4, Vec4Swizzles};
 use user_stage::{
 	ColorContext,
 	PixelColorer,
@@ -243,9 +243,9 @@ where
 		(0..=5).into_iter().for_each(|i : u8| -> () {
 			let edge_mask : u8 = 1 << i;
 
-			let mut input_points : Vec<Vec4> = poly_points.clone();
+			let input_points : Vec<Vec4> = poly_points.clone();
 			poly_points.clear();
-			let mut input_codes : Vec<u8> = reigon_codes.clone();
+			let input_codes : Vec<u8> = reigon_codes.clone();
 			reigon_codes.clear();
 
 			(0..input_points.len())
@@ -340,7 +340,7 @@ where
 				y_sorted
 					.sort_by(|a : &Vec2, b : &Vec2| -> Ordering { b.y.total_cmp(&a.y) });
 
-				let mut y_sorted_screen : [i32; 3] =
+				let y_sorted_screen : [i32; 3] =
 					y_sorted.map(|v : Vec2| -> i32 { self.ndy_to_screen_y(v.y) });
 
 				//Iterate over the triangle in two segments
@@ -375,10 +375,10 @@ where
 							return;
 						}
 
-						let mut full_x : f32 =
+						let full_x : f32 =
 							y_sorted[0].x + (y_sorted[2].x - y_sorted[0].x) * full_t;
 
-						let mut part_x : f32 =
+						let part_x : f32 =
 							y_sorted[j].x + (y_sorted[j + 1].x - y_sorted[j].x) * part_t;
 
 						let (init_x, fina_x) : (f32, f32) = if full_x > part_x {

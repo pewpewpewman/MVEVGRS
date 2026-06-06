@@ -2,9 +2,8 @@ use std::ops::{Add, Mul};
 use std::time::{Duration, Instant};
 
 use glam::{Mat4, Vec2, Vec3, Vec3Swizzles, Vec4};
-use image::{DynamicImage, ImageReader, Pixel, Rgba};
+use image::{DynamicImage, Pixel};
 use mvevgrs::mesh::obj_file::{load_obj_file, ObjV};
-use mvevgrs::mesh::{Mesh, Tri};
 use mvevgrs::renderer::user_stage::{ColorContext, VertContext, VertTransOut};
 use mvevgrs::renderer::Renderer;
 use mvevgrs::window_render_target::WindowRenderTarget;
@@ -51,7 +50,7 @@ fn main() -> Result<(), String> {
 
 	let start_time : Instant = Instant::now();
 	let mut frame_start_time : Instant = Instant::now();
-	let mut last_frame_duration : Duration = Duration::from_secs(0);
+	let mut _last_frame_duration : Duration = Duration::from_secs(0);
 
 	WindowRenderTarget::<ObjV, BasicP, BasicUE>::new(&mut Renderer::<
 		ObjV,
@@ -94,11 +93,11 @@ fn main() -> Result<(), String> {
 		vec![load_obj_file("models/spot.obj")?],
 		Some(Box::new(
 			move |r : &mut Renderer<ObjV, BasicP, BasicUE>| -> () {
-				last_frame_duration = Instant::now().duration_since(frame_start_time);
+				_last_frame_duration = Instant::now().duration_since(frame_start_time);
 				frame_start_time = Instant::now();
 				let t : f32 = Instant::now().duration_since(start_time).as_secs_f32();
 
-				let pos : Vec3 = Vec3::new(0.0, 0.0, 3.0);
+				let pos : Vec3 = Vec3::new(0.0, 0.0, 8.0);
 				let t_x : f32 = 0.0;
 				let t_y : f32 = t;
 				let t_z : f32 = 0.0;

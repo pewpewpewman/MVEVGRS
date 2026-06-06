@@ -12,7 +12,7 @@ fn main() -> Result<(), ()> {
 
 	let mut frame_start_time : Instant = Instant::now();
 
-	let mut last_frame_duration : Duration = Duration::from_secs(0);
+	let mut _last_frame_duration : Duration = Duration::from_secs(0);
 
 	let mut renderer : Renderer<BasicV, BasicP, BasicUE> = Renderer::new(
 		640,
@@ -53,10 +53,11 @@ fn main() -> Result<(), ()> {
 		)],
 		Some(Box::new(
 			move |r : &mut Renderer<BasicV, BasicP, BasicUE>| -> () {
-				last_frame_duration = Instant::now().duration_since(frame_start_time);
+				_last_frame_duration = Instant::now().duration_since(frame_start_time);
 				frame_start_time = Instant::now();
-				let t : f32 = Instant::now().duration_since(start_time).as_secs_f32();
-				dbg!(1.0 / last_frame_duration.as_secs_f32());
+				let _t : f32 = Instant::now().duration_since(start_time).as_secs_f32();
+				//Uncomment to see frame rate
+				//dbg!(1.0 / last_frame_duration.as_secs_f32());
 
 				let pos : Vec3 = Vec3::new(0.0, 0.0, 3.0);
 				let t_x : f32 = 0.0;
