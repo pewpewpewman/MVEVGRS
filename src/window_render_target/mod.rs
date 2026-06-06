@@ -180,9 +180,8 @@ where
 
 				self.source.camera.camera_mat *=
 					Mat4::from_translation(camera_pos_change);
-
-				// * Mat4::from_rotation_y(camera_horiz_angle_change)
-				//* Mat4::from_rotation_x(camera_vert_angle_change)
+				//* Mat4::from_rotation_y(camera_horiz_angle_change)
+				//* Mat4::from_rotation_x(camera_vert_angle_change);
 
 				//Advanced render update function and have it draw to its internal frame buffer
 				self.source.frame_step();

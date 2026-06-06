@@ -83,7 +83,7 @@ fn main() -> Result<(), String> {
 
 				Vec4::from((col, 1.0))
 			} else {
-				Vec4::new(1.0, 1.0, 0.0, 1.0)
+				Vec4::new(1.0, 0.5, 0.3, 1.0)
 			}
 		},
 		BasicUE {
