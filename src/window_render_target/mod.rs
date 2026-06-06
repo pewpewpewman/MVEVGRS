@@ -141,7 +141,7 @@ where
 				let mut camera_horiz_angle_change : f32 = 0_f32;
 				let mut camera_vert_angle_change : f32 = 0_f32;
 
-				let movement_amount : f32 = 0.05;
+				let movement_amount : f32 = 0.03;
 
 				self.keyboard_state.iter().for_each(|kc : &KeyCode| -> () {
 					match kc {

@@ -115,14 +115,14 @@ where
 		self: &Renderer<V, P, UE>,
 		x : f32,
 	) -> i32 {
-		f32::round((self.width - 1) as f32 * ((1_f32 + x) / 2_f32)) as i32
+		f32::ceil((self.width - 1) as f32 * ((1_f32 + x) / 2_f32)) as i32
 	}
 
 	pub fn ndy_to_screen_y(
 		self: &Renderer<V, P, UE>,
 		y : f32,
 	) -> i32 {
-		((self.height - 1) as f32 * (1_f32 - ((1_f32 + y) / 2_f32))) as i32
+		f32::ceil((self.height - 1) as f32 * (1_f32 - ((1_f32 + y) / 2_f32))) as i32
 	}
 
 	pub fn ndc_to_screen_c(
@@ -343,14 +343,13 @@ where
 				let mut y_sorted_screen : [i32; 3] =
 					y_sorted.map(|v : Vec2| -> i32 { self.ndy_to_screen_y(v.y) });
 
-				y_sorted_screen[1] += 1;
-
 				//Iterate over the triangle in two segments
 				(0..=1_usize).for_each(|j : usize| -> () {
 					//Iterate the top to the mid point in the first iteration
 					//and then from the mid point to the bottom in the second
-					let init_y : i32 = y_sorted_screen[j];
-					let fina_y : i32 = y_sorted_screen[j + 1];
+					let init_y : i32 = i32::max(y_sorted_screen[j], 0);
+					let fina_y : i32 =
+						i32::min(y_sorted_screen[j + 1], self.height() as i32 - 1);
 
 					(init_y..=fina_y).for_each(|y_screen : i32| -> () {
 						let y_ndc : f32 = self.screen_y_to_ndy(y_screen);
@@ -388,8 +387,9 @@ where
 							(full_x, part_x)
 						};
 
-						let init_x : i32 = self.ndx_to_screen_x(init_x);
-						let fina_x : i32 = self.ndx_to_screen_x(fina_x);
+						let init_x : i32 = i32::max(self.ndx_to_screen_x(init_x), 0);
+						let fina_x : i32 =
+							i32::min(self.ndx_to_screen_x(fina_x), self.width() as i32 - 1);
 
 						(init_x..=fina_x).for_each(|x_screen : i32| -> () {
 							//PER PIXEL OPERATIONS HERE
