@@ -9,7 +9,7 @@ use std::ops::{Add, BitOr, Div, Mul};
 use std::time::{Duration, Instant};
 
 use camera::Camera;
-use glam::{IVec2, Mat3, Mat4, Vec2, Vec3, Vec4, Vec4Swizzles};
+use glam::{IVec2, Mat3, Vec2, Vec3, Vec4, Vec4Swizzles};
 use user_stage::{
 	ColorContext,
 	PixelColorer,

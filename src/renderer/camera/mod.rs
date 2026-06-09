@@ -1,4 +1,4 @@
-use glam::{EulerRot, Mat4, Quat, Vec3};
+use glam::{Mat4, Vec3};
 
 //My justification for having this camera struct that is only
 //ever used as a field for the Renderer struct is that some
