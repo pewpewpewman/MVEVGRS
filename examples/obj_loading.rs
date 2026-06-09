@@ -66,14 +66,15 @@ fn main() -> Result<(), String> {
 		//Pixel colorer
 		|cd : &BasicP, ue : &BasicUE, _cc : &ColorContext| -> Vec4 {
 			if let Some(p) =
-				image::imageops::sample_nearest(&ue.texture, cd.uv.x, 1.0 - cd.uv.y)
+				image::imageops::sample_bilinear(&ue.texture, cd.uv.x, 1.0 - cd.uv.y)
 			{
 				let rgb : &[u8] = p.channels();
-				let col : Vec3 = Vec3::new(
-					rgb[2] as f32 / u8::MAX as f32,
-					rgb[1] as f32 / u8::MAX as f32,
-					rgb[0] as f32 / u8::MAX as f32,
-				);
+				let col : Vec3 = Vec3::ONE
+					- Vec3::new(
+						rgb[0] as f32 / u8::MAX as f32,
+						rgb[1] as f32 / u8::MAX as f32,
+						rgb[2] as f32 / u8::MAX as f32,
+					);
 
 				Vec4::from((col, 1.0))
 			} else {
@@ -102,8 +103,9 @@ fn main() -> Result<(), String> {
 					* Mat4::from_rotation_z(t_z)
 					* Mat4::from_scale(Vec3::splat(scale));
 
-				r.user_func_env.p_mat = r.camera.proj_mat;
-				r.user_func_env.cm_mat = r.camera.camera_mat * r.meshes[0].model_mat;
+				r.user_func_env.p_mat = r.camera.projection_matrix();
+				r.user_func_env.cm_mat =
+					r.camera.camera_matrix() * r.meshes[0].model_mat;
 			},
 		)),
 	))?;

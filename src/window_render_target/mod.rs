@@ -3,7 +3,7 @@ use std::num::NonZeroU32;
 use std::ops::{Add, Mul};
 use std::rc::Rc;
 
-use glam::{Mat4, Vec3, Vec4};
+use glam::{Mat4, Vec3, Vec4, Vec4Swizzles};
 use softbuffer::{Buffer, Context, Surface};
 use winit::application::ApplicationHandler;
 use winit::dpi::{PhysicalSize, Size};
@@ -137,52 +137,53 @@ where
 		match event {
 			WindowEvent::RedrawRequested => {
 				//Respond to user input
-				let mut camera_pos_change : Vec3 = Vec3::ZERO;
-				let mut camera_horiz_angle_change : f32 = 0_f32;
-				let mut camera_vert_angle_change : f32 = 0_f32;
+				let movement_speed : f32 =
+					5.0 * self.source.prev_frame_duration.as_secs_f32();
 
-				let movement_amount : f32 = 5.0;
+				let rotate_speed : f32 =
+					2.0 * self.source.prev_frame_duration.as_secs_f32();
+
+				let rot_mat : Mat4 = Mat4::from_rotation_y(self.source.camera.yaw)
+					* Mat4::from_rotation_x(self.source.camera.pitch);
+				let forward_dir : Vec3 = (rot_mat * Vec4::Z).xyz();
+				let right_dir : Vec3 = (rot_mat * Vec4::X).xyz();
 
 				self.keyboard_state.iter().for_each(|kc : &KeyCode| -> () {
 					match kc {
 						KeyCode::KeyW => {
-							camera_pos_change.z -= movement_amount;
+							self.source.camera.pos += forward_dir * movement_speed;
 						},
 						KeyCode::KeyA => {
-							camera_pos_change.x += movement_amount;
+							self.source.camera.pos += -right_dir * movement_speed;
 						},
 						KeyCode::KeyS => {
-							camera_pos_change.z += movement_amount;
+							self.source.camera.pos += -forward_dir * movement_speed;
 						},
 						KeyCode::KeyD => {
-							camera_pos_change.x -= movement_amount;
+							self.source.camera.pos += right_dir * movement_speed;
 						},
 
 						KeyCode::Space => {
-							camera_pos_change.y -= movement_amount;
+							self.source.camera.pos.y += movement_speed;
 						},
 
 						KeyCode::ShiftLeft => {
-							camera_pos_change.y += movement_amount;
+							self.source.camera.pos.y += -movement_speed;
 						},
 
-						KeyCode::ArrowLeft => camera_horiz_angle_change -= movement_amount,
-
-						KeyCode::ArrowRight => camera_horiz_angle_change += movement_amount,
-
-						KeyCode::ArrowUp => camera_vert_angle_change += movement_amount,
-
-						KeyCode::ArrowDown => camera_vert_angle_change -= movement_amount,
-
+						KeyCode::ArrowLeft => self.source.camera.yaw += -rotate_speed,
+						KeyCode::ArrowRight => self.source.camera.yaw += rotate_speed,
+						KeyCode::ArrowUp => self.source.camera.pitch += -rotate_speed,
+						KeyCode::ArrowDown => self.source.camera.pitch += rotate_speed,
 						_ => {},
 					}
 				});
 
-				self.source.camera.camera_mat *= Mat4::from_translation(
-					camera_pos_change * self.source.prev_frame_duration.as_secs_f32(),
-				);
-				//* Mat4::from_rotation_y(camera_horiz_angle_change)
-				//* Mat4::from_rotation_x(camera_vert_angle_change);
+				self.source.camera.pitch = self
+					.source
+					.camera
+					.pitch
+					.clamp(-std::f32::consts::FRAC_PI_2, std::f32::consts::FRAC_PI_2);
 
 				//Advanced render update function and have it draw to its internal frame buffer
 				self.source.frame_step();

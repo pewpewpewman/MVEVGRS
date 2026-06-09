@@ -64,8 +64,8 @@ fn main() -> Result<(), ()> {
 					* Mat4::from_scale(Vec3::splat(scale));
 
 				r.user_func_env = BasicUE {
-					p_mat : r.camera.proj_mat,
-					cm_mat : r.camera.camera_mat * r.meshes[0].model_mat,
+					p_mat : r.camera.proj_matrix(),
+					cm_mat : r.camera.camera_matrix() * r.meshes[0].model_mat,
 					brightness : 0.5,
 				};
 			},

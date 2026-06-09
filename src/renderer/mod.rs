@@ -92,7 +92,10 @@ where
 			show_tri_div : false,
 			frame_buffer : vec![Vec4::default(); pix_area],
 			depth_buffer : vec![f32::default(); pix_area],
-			camera : Camera::default(),
+			camera : Camera {
+				aspect_ratio : width as f32 / height as f32,
+				..Camera::default()
+			},
 			renderer_start_time : Instant::now(),
 			prev_frame_duration : Duration::ZERO,
 			curr_frame_start_time : Instant::now(),
@@ -473,8 +476,6 @@ where
 		self.frame_buffer.fill(self.background_col);
 
 		self.depth_buffer.fill(f32::MAX);
-
-		let _proj_cam_mat : Mat4 = self.camera.proj_mat * self.camera.camera_mat;
 
 		self
 			.meshes
