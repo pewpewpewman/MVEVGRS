@@ -2,6 +2,13 @@
 name = "mvevgrs"
 version = "0.1.0"
 edition = "2024"
+description = "Software renderer designed for customizability"
+readme = "readme.md"
+repository = "https://github.com/pewpewpewman/MVEVGRS"
+license = "GPL-2.0"
+keywords = ["graphics", "software rendering", "obj"]
+categories = ["graphics", "rendering"]
+
 
 [dependencies]
 glam = "0.32.0"

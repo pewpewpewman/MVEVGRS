@@ -95,11 +95,10 @@ where
 							use image::RgbaImage;
 
 							let (rgba, width, height) : (Vec<u8>, u32, u32) = {
-								let image : RgbaImage = image::load_from_memory(
-									include_bytes!("../../scaled_icon.png"),
-								)
-								.expect("Icon should be loadable!")
-								.into_rgba8();
+								let image : RgbaImage =
+									image::load_from_memory(include_bytes!("../../icon.png"))
+										.expect("Icon should be loadable!")
+										.into_rgba8();
 
 								let (width, height) : (u32, u32) = image.dimensions();
 
