@@ -6,7 +6,7 @@ description = "Software renderer designed for customizability"
 readme = "readme.md"
 repository = "https://github.com/pewpewpewman/MVEVGRS"
 license = "GPL-2.0"
-keywords = ["graphics", "software rendering", "obj"]
+keywords = ["graphics", "software-rendering", "obj"]
 categories = ["graphics", "rendering"]
 
 
